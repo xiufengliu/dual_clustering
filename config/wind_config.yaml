@@ -1,0 +1,17 @@
+# Wind power specific configuration
+data:
+  dataset_type: "wind"
+  country: "Denmark"
+  start_date: "2019-01-01"
+  end_date: "2023-10-03"
+  frequency: "hourly"
+  
+clustering:
+  n_clusters: 5  # Optimized for wind patterns (calm, light, moderate, strong, very strong)
+  
+forecasting:
+  horizon: 180
+  seasonal_patterns: ["daily", "weekly", "seasonal"]
+  
+evaluation:
+  baseline_models: ["naive", "ses", "arima", "prophet", "svr", "lstm"]

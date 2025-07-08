@@ -1,0 +1,202 @@
+# Comprehensive benchmark experiment configuration
+experiment_name: "comprehensive_benchmark"
+description: "Rigorous comparison of neutrosophic framework against state-of-the-art baselines"
+
+# Data configuration
+data:
+  source: "entso_e"
+  normalization: "min_max"
+  train_split: 0.7
+  val_split: 0.1
+  test_split: 0.2
+  interpolation_method: "linear"
+  outlier_threshold: 3.0
+  n_lags: 24  # For baseline feature creation
+
+# Statistical testing
+statistical_testing:
+  alpha: 0.05
+  confidence_level: 0.95
+  multiple_comparison_correction: "holm"
+  n_bootstrap_samples: 1000
+
+# Baseline model configurations
+baseline_models:
+  arima:
+    order: [1, 1, 1]
+    seasonal_order: [1, 1, 1, 24]
+    
+  sarima:
+    order: [1, 1, 1]
+    seasonal_order: [1, 1, 1, 24]
+    
+  svr:
+    kernel: "rbf"
+    C: 1.0
+    gamma: "scale"
+    epsilon: 0.1
+    
+  lightgbm:
+    n_estimators: 100
+    learning_rate: 0.1
+    max_depth: -1
+    num_leaves: 31
+    min_child_samples: 20
+    
+  mlp:
+    hidden_layer_sizes: [100, 50]
+    activation: "relu"
+    max_iter: 1000
+    learning_rate_init: 0.001
+    
+  vanilla_rf:
+    n_estimators: 100
+    max_depth: 20
+    min_samples_split: 2
+    min_samples_leaf: 1
+    
+  lstm:
+    lstm_units: 50
+    dense_units: 25
+    epochs: 100
+    batch_size: 32
+    sequence_length: 24
+    dropout: 0.2
+    
+  cnn_lstm:
+    cnn_filters: 64
+    kernel_size: 3
+    lstm_units: 50
+    dense_units: 25
+    epochs: 100
+    batch_size: 32
+    sequence_length: 24
+    
+  nbeats:
+    stack_types: ["trend", "seasonality"]
+    nb_blocks_per_stack: 3
+    forecast_length: 1
+    backcast_length: 24
+    hidden_layer_units: 256
+    epochs: 100
+    batch_size: 32
+
+# Proposed model configuration (neutrosophic framework)
+clustering:
+  n_clusters: 5
+  fcm_fuzziness: 2.0
+  max_iter: 100
+  tol: 1e-4
+
+neutrosophic:
+  entropy_epsilon: 1e-9
+  entropy_base: 2.0
+
+random_forest:
+  n_estimators: 100
+  max_depth: 20
+  min_samples_split: 2
+  min_samples_leaf: 1
+    
+forecasting:
+  horizon: 180
+  confidence_levels: [0.8, 0.9, 0.95]
+  interval_method: "heuristic"
+  gamma: 1.96
+  beta: 1.0
+
+# Evaluation metrics
+evaluation:
+  point_metrics:
+    - "rmse"
+    - "mae" 
+    - "mape"
+    - "smape"
+    - "r2"
+    - "mbe"
+    - "nrmse"
+    - "cv_rmse"
+    
+  interval_metrics:
+    - "picp"
+    - "pinaw"
+    - "cwc"
+    - "ace"
+    - "interval_score"
+    
+  statistical_tests:
+    - "diebold_mariano"
+    - "modified_diebold_mariano"
+    - "wilcoxon_signed_rank"
+    - "friedman"
+
+# Cross-validation settings
+cross_validation:
+  enabled: true
+  n_folds: 5
+  method: "time_series_split"
+  gap: 24  # Gap between train and test in time series CV
+
+# Ablation study settings
+ablation_study:
+  enabled: true
+  components:
+    - "without_neutrosophic_features"
+    - "without_dual_clustering"
+    - "kmeans_only"
+    - "fcm_only"
+    - "alternative_indeterminacy"
+    - "linear_model"
+
+# Sensitivity analysis
+sensitivity_analysis:
+  enabled: true
+  parameters:
+    n_clusters: [3, 4, 5, 6, 7, 8]
+    fcm_fuzziness: [1.5, 2.0, 2.5, 3.0]
+    n_estimators: [50, 100, 150, 200]
+    gamma: [1.0, 1.5, 1.96, 2.0, 2.5]
+    beta: [0.5, 1.0, 1.5, 2.0]
+
+# Computational analysis
+computational_analysis:
+  enabled: true
+  measure_training_time: true
+  measure_prediction_time: true
+  measure_memory_usage: true
+  scalability_test: true
+  dataset_sizes: [1000, 5000, 10000, 20000]
+
+# Visualization settings
+visualization:
+  enabled: true
+  plots:
+    - "prediction_comparison"
+    - "error_distribution"
+    - "feature_importance"
+    - "indeterminacy_timeseries"
+    - "tsne_features"
+    - "prediction_intervals"
+    - "statistical_test_heatmap"
+    - "model_ranking_radar"
+
+# Output settings
+output:
+  save_predictions: true
+  save_models: true
+  save_feature_importance: true
+  save_statistical_tests: true
+  generate_report: true
+  report_format: ["html", "pdf"]
+
+# Reproducibility
+reproducibility:
+  seed: 42
+  deterministic: true
+  n_runs: 5  # Multiple runs for robustness
+
+# Logging
+logging:
+  level: "INFO"
+  save_logs: true
+  detailed_timing: true

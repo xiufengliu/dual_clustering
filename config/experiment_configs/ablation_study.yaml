@@ -1,0 +1,58 @@
+# Ablation study configuration
+experiment:
+  name: "ablation_study"
+  description: "Systematic evaluation of framework components"
+  
+variants:
+  baseline:
+    description: "Full framework"
+    use_clustering: true
+    use_fcm: true
+    use_kmeans: true
+    use_neutrosophic: true
+    use_indeterminacy: true
+    
+  no_clustering:
+    description: "Random Forest without clustering features"
+    use_clustering: false
+    use_fcm: false
+    use_kmeans: false
+    use_neutrosophic: false
+    use_indeterminacy: false
+    
+  kmeans_only:
+    description: "K-Means clustering only"
+    use_clustering: true
+    use_fcm: false
+    use_kmeans: true
+    use_neutrosophic: true
+    use_indeterminacy: false
+    
+  fcm_only:
+    description: "Fuzzy C-Means clustering only"
+    use_clustering: true
+    use_fcm: true
+    use_kmeans: false
+    use_neutrosophic: true
+    use_indeterminacy: true
+    
+  no_neutrosophic:
+    description: "Dual clustering without neutrosophic transformation"
+    use_clustering: true
+    use_fcm: true
+    use_kmeans: true
+    use_neutrosophic: false
+    use_indeterminacy: false
+    
+  no_indeterminacy:
+    description: "Neutrosophic without indeterminacy component"
+    use_clustering: true
+    use_fcm: true
+    use_kmeans: true
+    use_neutrosophic: true
+    use_indeterminacy: false
+    
+evaluation:
+  statistical_tests: true
+  significance_level: 0.05
+  multiple_runs: 10

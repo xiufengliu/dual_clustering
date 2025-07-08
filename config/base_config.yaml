@@ -1,0 +1,46 @@
+# Base configuration for Neutrosophic Dual Clustering Framework
+data:
+  source: "entso_e"
+  normalization: "min_max"
+  train_split: 0.8
+  validation_split: 0.2
+  interpolation_method: "linear"
+  outlier_threshold: 3.0  # standard deviations
+  
+clustering:
+  n_clusters: 5
+  fcm_fuzziness: 2.0
+  max_iter: 100
+  tol: 1e-4
+  random_state: 42
+  
+neutrosophic:
+  entropy_epsilon: 1e-9
+  entropy_base: 2.0
+  
+random_forest:
+  n_estimators: 100
+  max_depth: 20
+  min_samples_split: 2
+  min_samples_leaf: 1
+  random_state: 42
+  n_jobs: -1
+  
+forecasting:
+  horizon: 180
+  confidence_levels: [0.8, 0.9, 0.95]
+  interval_method: "heuristic"
+  gamma: 1.96  # CI parameter for RF variance
+  beta: 1.0    # CI parameter for indeterminacy
+  
+evaluation:
+  metrics: ["rmse", "mae", "mape", "picp", "pinaw", "ace"]
+  cross_validation: false
+  test_size: 0.2
+  
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+reproducibility:
+  seed: 42

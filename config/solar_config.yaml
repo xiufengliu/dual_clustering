@@ -1,0 +1,17 @@
+# Solar power specific configuration
+data:
+  dataset_type: "solar"
+  country: "Denmark"
+  start_date: "2019-01-01"
+  end_date: "2023-10-03"
+  frequency: "hourly"
+  
+clustering:
+  n_clusters: 5  # Optimized for solar patterns (night, dawn, low, medium, high)
+  
+forecasting:
+  horizon: 180
+  seasonal_patterns: ["daily", "weekly", "monthly"]
+  
+evaluation:
+  baseline_models: ["naive", "ses", "arima", "prophet", "svr", "lstm"]
