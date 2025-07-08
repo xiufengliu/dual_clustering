@@ -1,0 +1,9 @@
+Modules Release 5.3.0 (2023-05-14)
+DCC-SW: Added modules (2023-aug/XeonGold6226R)
+DCC-SW: Removed standard modules: /apps/dcc/etc/ModulesAlma92/modulefiles
+DCC-SW: Using gnu/12.3.0 compiler (requested)
+Modules Release 4.8.0 (2021-07-14)
+DCC-SW: Added modules (2023-aug/XeonGold6226R)
+DCC-SW: Removed standard modules: /apps/dcc/etc/ModulesAlma92/modulefiles
+DCC-SW: Using gnu/12.3.0 compiler (requested)
+Loaded module: cuda/12.6

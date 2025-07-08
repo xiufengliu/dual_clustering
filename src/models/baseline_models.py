@@ -79,12 +79,23 @@ class ARIMAForecaster(BaseForecaster):
         """Make predictions with uncertainty estimates."""
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
-            
+
         n_steps = len(X)
         forecast_result = self.fitted_model.get_forecast(steps=n_steps)
-        predictions = forecast_result.predicted_mean.values
-        uncertainties = forecast_result.se_mean.values
-        
+
+        # Handle both pandas Series and numpy arrays
+        predictions = forecast_result.predicted_mean
+        if hasattr(predictions, 'values'):
+            predictions = predictions.values
+        else:
+            predictions = np.array(predictions)
+
+        uncertainties = forecast_result.se_mean
+        if hasattr(uncertainties, 'values'):
+            uncertainties = uncertainties.values
+        else:
+            uncertainties = np.array(uncertainties)
+
         return predictions, uncertainties
 
 
@@ -121,12 +132,23 @@ class SARIMAForecaster(BaseForecaster):
         """Make predictions with uncertainty estimates."""
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
-            
+
         n_steps = len(X)
         forecast_result = self.fitted_model.get_forecast(steps=n_steps)
-        predictions = forecast_result.predicted_mean.values
-        uncertainties = forecast_result.se_mean.values
-        
+
+        # Handle both pandas Series and numpy arrays
+        predictions = forecast_result.predicted_mean
+        if hasattr(predictions, 'values'):
+            predictions = predictions.values
+        else:
+            predictions = np.array(predictions)
+
+        uncertainties = forecast_result.se_mean
+        if hasattr(uncertainties, 'values'):
+            uncertainties = uncertainties.values
+        else:
+            uncertainties = np.array(uncertainties)
+
         return predictions, uncertainties
 
 
@@ -383,6 +405,16 @@ class LSTMForecaster(BaseForecaster):
         with torch.no_grad():
             predictions = self.model(X_tensor).cpu().numpy().flatten()
 
+        # Ensure predictions match expected length
+        expected_length = len(X)
+        if len(predictions) != expected_length:
+            # Repeat last prediction or truncate to match expected length
+            if len(predictions) < expected_length:
+                predictions = np.pad(predictions, (0, expected_length - len(predictions)),
+                                   mode='edge')
+            else:
+                predictions = predictions[:expected_length]
+
         return predictions
 
     def predict_with_uncertainty(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -525,6 +557,16 @@ class CNNLSTMForecaster(BaseForecaster):
         with torch.no_grad():
             predictions = self.model(X_tensor).cpu().numpy().flatten()
 
+        # Ensure predictions match expected length
+        expected_length = len(X)
+        if len(predictions) != expected_length:
+            # Repeat last prediction or truncate to match expected length
+            if len(predictions) < expected_length:
+                predictions = np.pad(predictions, (0, expected_length - len(predictions)),
+                                   mode='edge')
+            else:
+                predictions = predictions[:expected_length]
+
         return predictions
 
     def predict_with_uncertainty(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -663,6 +705,16 @@ class NBeatsForecaster(BaseForecaster):
         self.model.eval()
         with torch.no_grad():
             predictions = self.model(X_tensor).cpu().numpy().flatten()
+
+        # Ensure predictions match expected length
+        expected_length = len(X)
+        if len(predictions) != expected_length:
+            # Repeat last prediction or truncate to match expected length
+            if len(predictions) < expected_length:
+                predictions = np.pad(predictions, (0, expected_length - len(predictions)),
+                                   mode='edge')
+            else:
+                predictions = predictions[:expected_length]
 
         return predictions
 

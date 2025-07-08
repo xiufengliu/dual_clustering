@@ -14,10 +14,10 @@ class DualClusterer:
     """Dual clustering approach combining K-Means and Fuzzy C-Means."""
     
     def __init__(self, n_clusters: int = 5, fcm_fuzziness: float = 2.0,
-                 max_iter: int = 100, tol: float = 1e-4, 
+                 max_iter: int = 100, tol: float = 1e-4,
                  random_state: Optional[int] = None):
         """Initialize dual clusterer.
-        
+
         Args:
             n_clusters: Number of clusters for both algorithms
             fcm_fuzziness: Fuzziness parameter for FCM
@@ -28,7 +28,8 @@ class DualClusterer:
         self.n_clusters = n_clusters
         self.fcm_fuzziness = fcm_fuzziness
         self.max_iter = max_iter
-        self.tol = tol
+        # Ensure tol is always a float (in case it comes from YAML as string)
+        self.tol = float(tol)
         self.random_state = random_state
         
         # Initialize clusterers
