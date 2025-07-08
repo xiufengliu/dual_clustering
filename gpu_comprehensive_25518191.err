@@ -1,9 +1,10 @@
 Modules Release 5.3.0 (2023-05-14)
-DCC-SW: Added modules (2023-aug/XeonGold6226R)
+DCC-SW: Added modules (2023-aug/XeonGold6326)
 DCC-SW: Removed standard modules: /apps/dcc/etc/ModulesAlma92/modulefiles
 DCC-SW: Using gnu/12.3.0 compiler (requested)
 Modules Release 4.8.0 (2021-07-14)
-DCC-SW: Added modules (2023-aug/XeonGold6226R)
+DCC-SW: Added modules (2023-aug/XeonGold6326)
 DCC-SW: Removed standard modules: /apps/dcc/etc/ModulesAlma92/modulefiles
 DCC-SW: Using gnu/12.3.0 compiler (requested)
 Loaded module: cuda/12.6
+Failed to run lstm: all the input array dimensions except for the concatenation axis must match exactly, but along dimension 1, the array at index 0 has size 1 and the array at index 1 has size 24

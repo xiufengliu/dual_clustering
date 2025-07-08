@@ -1,7 +1,7 @@
 === Starting Comprehensive Evaluation ===
-Job ID: 25517696
-Host: n-62-12-23
-Date: Tue Jul  8 14:50:19 CEST 2025
+Job ID: 25518191
+Host: n-62-18-10
+Date: Tue Jul  8 16:03:57 CEST 2025
 Working directory: /zhome/bb/9/101964/xiuli/dual_clustering
 === Installing dependencies ===
 Requirement already satisfied: numpy>=1.21.0 in /work3/xiuli/anaconda3/lib/python3.13/site-packages (from -r requirements.txt (line 1)) (2.1.3)
@@ -210,8 +210,8 @@ Requirement already satisfied: executing in /work3/xiuli/anaconda3/lib/python3.1
 Requirement already satisfied: asttokens in /work3/xiuli/anaconda3/lib/python3.13/site-packages (from stack-data->ipython>=7.23.1->ipykernel>=6.0.0->-r requirements.txt (line 20)) (3.0.0)
 Requirement already satisfied: pure-eval in /work3/xiuli/anaconda3/lib/python3.13/site-packages (from stack-data->ipython>=7.23.1->ipykernel>=6.0.0->-r requirements.txt (line 20)) (0.2.2)
 === Running comprehensive evaluation ===
-2025-07-08 14:50:45,142 - comprehensive_evaluation - INFO - Starting comprehensive evaluation for TNNLS paper
-2025-07-08 14:50:45,143 - comprehensive_evaluation - INFO - Configuration: benchmark_config
-2025-07-08 14:50:45,144 - comprehensive_evaluation - INFO - Datasets: ['entso_e_solar', 'entso_e_wind', 'gefcom2014_solar']
-2025-07-08 14:50:45,144 - comprehensive_evaluation - INFO - Output directory: results/comprehensive
-2025-07-08 14:50:45,158 - comprehensive_evaluation - INFO - Running main comparison experiments
+2025-07-08 16:04:49,888 - comprehensive_evaluation - INFO - Starting comprehensive evaluation for TNNLS paper
+2025-07-08 16:04:49,890 - comprehensive_evaluation - INFO - Configuration: benchmark_config
+2025-07-08 16:04:49,891 - comprehensive_evaluation - INFO - Datasets: ['gefcom2014_energy', 'kaggle_solar_plant', 'kaggle_wind_power', 'nrel_solar', 'uk_sheffield_solar', 'entso_e_solar']
+2025-07-08 16:04:49,892 - comprehensive_evaluation - INFO - Output directory: results/comprehensive
+2025-07-08 16:04:49,927 - comprehensive_evaluation - INFO - Running main comparison experiments

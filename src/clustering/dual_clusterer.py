@@ -36,7 +36,7 @@ class DualClusterer:
         self.kmeans_clusterer = KMeansClusterer(
             n_clusters=n_clusters,
             max_iter=max_iter,
-            tol=tol,
+            tol=self.tol,  # Use the converted float value
             random_state=random_state
         )
         
@@ -44,7 +44,7 @@ class DualClusterer:
             n_clusters=n_clusters,
             m=fcm_fuzziness,
             max_iter=max_iter,
-            tol=tol,
+            tol=self.tol,  # Use the converted float value
             random_state=random_state
         )
         

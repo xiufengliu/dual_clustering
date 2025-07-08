@@ -329,6 +329,13 @@ class LSTMForecaster(BaseForecaster):
     def _create_sequences(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Create sequences for LSTM training."""
         X_seq, y_seq = [], []
+        # Ensure we have enough data for at least one sequence
+        if len(X) < self.sequence_length:
+            # If not enough data, repeat the last value
+            X_padded = np.vstack([X] + [X[-1:]] * (self.sequence_length - len(X)))
+            y_padded = np.concatenate([y, [y[-1]] * (self.sequence_length - len(y))])
+            X, y = X_padded, y_padded
+
         for i in range(self.sequence_length, len(X)):
             X_seq.append(X[i-self.sequence_length:i])
             y_seq.append(y[i])
@@ -389,33 +396,53 @@ class LSTMForecaster(BaseForecaster):
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
 
-        # Create sequences for prediction
-        if len(X) < self.sequence_length:
-            # Pad with last known values if needed
-            X_padded = np.vstack([X[0:1]] * (self.sequence_length - len(X)) + [X])
-        else:
-            X_padded = X
-
-        X_seq, _ = self._create_sequences(X_padded, np.zeros(len(X_padded)))
-
-        # Convert to tensor and predict
-        X_tensor = torch.FloatTensor(X_seq).to(self.device)
-
-        self.model.eval()
-        with torch.no_grad():
-            predictions = self.model(X_tensor).cpu().numpy().flatten()
-
-        # Ensure predictions match expected length
         expected_length = len(X)
-        if len(predictions) != expected_length:
-            # Repeat last prediction or truncate to match expected length
-            if len(predictions) < expected_length:
-                predictions = np.pad(predictions, (0, expected_length - len(predictions)),
-                                   mode='edge')
-            else:
-                predictions = predictions[:expected_length]
 
-        return predictions
+        # For small datasets, use simple approach
+        if expected_length < self.sequence_length:
+            # Use the last sequence_length values for prediction
+            if len(X) == 1:
+                # Single prediction - use the value repeated
+                X_input = np.repeat(X[0], self.sequence_length).reshape(-1, 1)
+            else:
+                # Pad with the last value
+                X_input = np.vstack([X] + [X[-1:]] * (self.sequence_length - len(X)))
+
+            X_seq = X_input[-self.sequence_length:].reshape(1, self.sequence_length, -1)
+            X_tensor = torch.FloatTensor(X_seq).to(self.device)
+
+            self.model.eval()
+            with torch.no_grad():
+                pred = self.model(X_tensor).cpu().numpy().flatten()[0]
+
+            # Return the same prediction for all requested points
+            return np.full(expected_length, pred)
+
+        # For larger datasets, use sliding window approach
+        predictions = []
+        for i in range(expected_length):
+            if i < self.sequence_length:
+                # For early predictions, use available data + padding
+                start_idx = max(0, i - self.sequence_length + 1)
+                X_window = X[start_idx:i+1]
+                if len(X_window) < self.sequence_length:
+                    # Pad with first value
+                    padding = np.repeat(X[0], self.sequence_length - len(X_window)).reshape(-1, 1)
+                    X_window = np.vstack([padding, X_window])
+            else:
+                # Use the last sequence_length values
+                X_window = X[i-self.sequence_length+1:i+1]
+
+            X_seq = X_window.reshape(1, self.sequence_length, -1)
+            X_tensor = torch.FloatTensor(X_seq).to(self.device)
+
+            self.model.eval()
+            with torch.no_grad():
+                pred = self.model(X_tensor).cpu().numpy().flatten()[0]
+
+            predictions.append(pred)
+
+        return np.array(predictions)
 
     def predict_with_uncertainty(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions with uncertainty estimates."""
@@ -481,6 +508,13 @@ class CNNLSTMForecaster(BaseForecaster):
     def _create_sequences(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Create sequences for CNN-LSTM training."""
         X_seq, y_seq = [], []
+        # Ensure we have enough data for at least one sequence
+        if len(X) < self.sequence_length:
+            # If not enough data, repeat the last value
+            X_padded = np.vstack([X] + [X[-1:]] * (self.sequence_length - len(X)))
+            y_padded = np.concatenate([y, [y[-1]] * (self.sequence_length - len(y))])
+            X, y = X_padded, y_padded
+
         for i in range(self.sequence_length, len(X)):
             X_seq.append(X[i-self.sequence_length:i])
             y_seq.append(y[i])
@@ -542,32 +576,53 @@ class CNNLSTMForecaster(BaseForecaster):
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
 
-        # Create sequences for prediction
-        if len(X) < self.sequence_length:
-            X_padded = np.vstack([X[0:1]] * (self.sequence_length - len(X)) + [X])
-        else:
-            X_padded = X
-
-        X_seq, _ = self._create_sequences(X_padded, np.zeros(len(X_padded)))
-
-        # Convert to tensor and predict
-        X_tensor = torch.FloatTensor(X_seq).to(self.device)
-
-        self.model.eval()
-        with torch.no_grad():
-            predictions = self.model(X_tensor).cpu().numpy().flatten()
-
-        # Ensure predictions match expected length
         expected_length = len(X)
-        if len(predictions) != expected_length:
-            # Repeat last prediction or truncate to match expected length
-            if len(predictions) < expected_length:
-                predictions = np.pad(predictions, (0, expected_length - len(predictions)),
-                                   mode='edge')
-            else:
-                predictions = predictions[:expected_length]
 
-        return predictions
+        # For small datasets, use simple approach
+        if expected_length < self.sequence_length:
+            # Use the last sequence_length values for prediction
+            if len(X) == 1:
+                # Single prediction - use the value repeated
+                X_input = np.repeat(X[0], self.sequence_length).reshape(-1, 1)
+            else:
+                # Pad with the last value
+                X_input = np.vstack([X] + [X[-1:]] * (self.sequence_length - len(X)))
+
+            X_seq = X_input[-self.sequence_length:].reshape(1, self.sequence_length, -1)
+            X_tensor = torch.FloatTensor(X_seq).to(self.device)
+
+            self.model.eval()
+            with torch.no_grad():
+                pred = self.model(X_tensor).cpu().numpy().flatten()[0]
+
+            # Return the same prediction for all requested points
+            return np.full(expected_length, pred)
+
+        # For larger datasets, use sliding window approach
+        predictions = []
+        for i in range(expected_length):
+            if i < self.sequence_length:
+                # For early predictions, use available data + padding
+                start_idx = max(0, i - self.sequence_length + 1)
+                X_window = X[start_idx:i+1]
+                if len(X_window) < self.sequence_length:
+                    # Pad with first value
+                    padding = np.repeat(X[0], self.sequence_length - len(X_window)).reshape(-1, 1)
+                    X_window = np.vstack([padding, X_window])
+            else:
+                # Use the last sequence_length values
+                X_window = X[i-self.sequence_length+1:i+1]
+
+            X_seq = X_window.reshape(1, self.sequence_length, -1)
+            X_tensor = torch.FloatTensor(X_seq).to(self.device)
+
+            self.model.eval()
+            with torch.no_grad():
+                pred = self.model(X_tensor).cpu().numpy().flatten()[0]
+
+            predictions.append(pred)
+
+        return np.array(predictions)
 
     def predict_with_uncertainty(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions with uncertainty estimates."""
@@ -625,6 +680,15 @@ class NBeatsForecaster(BaseForecaster):
     def _create_sequences(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Create sequences for N-BEATS training."""
         X_seq, y_seq = [], []
+
+        # Ensure we have enough data for at least one sequence
+        min_length = self.backcast_length + self.forecast_length
+        if len(X) < min_length:
+            # If not enough data, repeat the last value
+            X_padded = np.vstack([X] + [X[-1:]] * (min_length - len(X)))
+            y_padded = np.concatenate([y, [y[-1]] * (min_length - len(y))])
+            X, y = X_padded, y_padded
+
         for i in range(self.backcast_length, len(X) - self.forecast_length + 1):
             X_seq.append(X[i-self.backcast_length:i].flatten())
             y_seq.append(y[i:i+self.forecast_length])
@@ -688,35 +752,53 @@ class NBeatsForecaster(BaseForecaster):
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
 
-        # Create sequences for prediction
-        if len(X) < self.backcast_length:
-            X_padded = np.vstack([X[0:1]] * (self.backcast_length - len(X)) + [X])
-        else:
-            X_padded = X
-
-        X_seq, _ = self._create_sequences(X_padded, np.zeros(len(X_padded)))
-
-        # Flatten sequences
-        X_flat = X_seq.reshape(X_seq.shape[0], -1)
-
-        # Convert to tensor and predict
-        X_tensor = torch.FloatTensor(X_flat).to(self.device)
-
-        self.model.eval()
-        with torch.no_grad():
-            predictions = self.model(X_tensor).cpu().numpy().flatten()
-
-        # Ensure predictions match expected length
         expected_length = len(X)
-        if len(predictions) != expected_length:
-            # Repeat last prediction or truncate to match expected length
-            if len(predictions) < expected_length:
-                predictions = np.pad(predictions, (0, expected_length - len(predictions)),
-                                   mode='edge')
-            else:
-                predictions = predictions[:expected_length]
 
-        return predictions
+        # For small datasets, use simple approach
+        if expected_length < self.backcast_length:
+            # Use the last backcast_length values for prediction
+            if len(X) == 1:
+                # Single prediction - use the value repeated
+                X_input = np.repeat(X[0], self.backcast_length).reshape(-1, 1)
+            else:
+                # Pad with the last value
+                X_input = np.vstack([X] + [X[-1:]] * (self.backcast_length - len(X)))
+
+            X_flat = X_input[-self.backcast_length:].flatten().reshape(1, -1)
+            X_tensor = torch.FloatTensor(X_flat).to(self.device)
+
+            self.model.eval()
+            with torch.no_grad():
+                pred = self.model(X_tensor).cpu().numpy().flatten()[0]
+
+            # Return the same prediction for all requested points
+            return np.full(expected_length, pred)
+
+        # For larger datasets, use sliding window approach
+        predictions = []
+        for i in range(expected_length):
+            if i < self.backcast_length:
+                # For early predictions, use available data + padding
+                start_idx = max(0, i - self.backcast_length + 1)
+                X_window = X[start_idx:i+1]
+                if len(X_window) < self.backcast_length:
+                    # Pad with first value
+                    padding = np.repeat(X[0], self.backcast_length - len(X_window)).reshape(-1, 1)
+                    X_window = np.vstack([padding, X_window])
+            else:
+                # Use the last backcast_length values
+                X_window = X[i-self.backcast_length+1:i+1]
+
+            X_flat = X_window.flatten().reshape(1, -1)
+            X_tensor = torch.FloatTensor(X_flat).to(self.device)
+
+            self.model.eval()
+            with torch.no_grad():
+                pred = self.model(X_tensor).cpu().numpy().flatten()[0]
+
+            predictions.append(pred)
+
+        return np.array(predictions)
 
     def predict_with_uncertainty(self, X: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Make predictions with uncertainty estimates."""

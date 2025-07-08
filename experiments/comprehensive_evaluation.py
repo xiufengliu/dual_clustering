@@ -515,8 +515,26 @@ class ComprehensiveEvaluation:
             raise FileNotFoundError(f"Processed data file not found: {data_file}")
 
         data = pd.read_csv(data_file)
+
+        # Validate data structure
+        if 'timestamp' not in data.columns:
+            raise ValueError(f"Dataset {dataset_name} missing 'timestamp' column")
+        if 'energy_generation' not in data.columns:
+            raise ValueError(f"Dataset {dataset_name} missing 'energy_generation' column")
+
+        # Check for sufficient data
+        if len(data) < 100:
+            raise ValueError(f"Dataset {dataset_name} has insufficient data: {len(data)} rows")
+
         data['timestamp'] = pd.to_datetime(data['timestamp'])
         data = data.set_index('timestamp')
+
+        # Remove any NaN values
+        data = data.dropna()
+
+        # Ensure energy_generation is numeric
+        data['energy_generation'] = pd.to_numeric(data['energy_generation'], errors='coerce')
+        data = data.dropna()
 
         # Split data
         train_split = self.config.get('train_split', 0.7)
@@ -781,8 +799,14 @@ class ComprehensiveEvaluation:
             'n_runs': self.config.get('n_runs', 1)
         }
 
-        # Define datasets to evaluate
-        datasets = ['entso_e_solar', 'entso_e_wind', 'gefcom2014_solar']
+        # Define datasets to evaluate - use all available real datasets
+        datasets = [
+            'gefcom2014_energy', 'gefcom2014_solar', 'gefcom2014_wind',
+            'kaggle_solar_plant', 'kaggle_wind_power',
+            'nrel_canada_wind', 'nrel_solar', 'nrel_wind',
+            'uk_sheffield_solar', 'entso_e_load',
+            'entso_e_solar', 'entso_e_wind'  # Keep legacy for compatibility
+        ]
 
         # Run main experiments
         logger.info("Running main comparison experiments")
@@ -897,7 +921,10 @@ def main():
     parser.add_argument("--output-dir", type=str, default="results/comprehensive",
                        help="Output directory")
     parser.add_argument("--datasets", nargs="+",
-                       default=["entso_e_solar", "entso_e_wind", "gefcom2014_solar"],
+                       default=[
+                           'gefcom2014_energy', 'kaggle_solar_plant', 'kaggle_wind_power',
+                           'nrel_solar', 'uk_sheffield_solar', 'entso_e_solar'
+                       ],
                        help="Datasets to evaluate")
     parser.add_argument("--skip-main", action="store_true",
                        help="Skip main comparison experiments")

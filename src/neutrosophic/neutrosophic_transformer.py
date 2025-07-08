@@ -72,7 +72,7 @@ class NeutrosophicTransformer:
         Returns:
             NeutrosophicComponents containing T, I, F arrays
         """
-        self._validate_inputs(kmeans_labels, fcm_memberships)
+        kmeans_labels = self._validate_inputs(kmeans_labels, fcm_memberships)
         
         n_samples, n_clusters = fcm_memberships.shape
         
@@ -87,9 +87,27 @@ class NeutrosophicTransformer:
         for i in range(n_samples):
             # Get K-means assigned cluster for sample i
             kmeans_cluster = kmeans_labels[i]
-            
+
+            # Ensure kmeans_cluster is an integer (not boolean or other type)
+            if not isinstance(kmeans_cluster, (int, np.integer)):
+                try:
+                    kmeans_cluster = int(kmeans_cluster)
+                except (ValueError, TypeError) as e:
+                    raise ValueError(f"Cannot convert kmeans_cluster to int for sample {i}: {kmeans_cluster}, type: {type(kmeans_cluster)}") from e
+
+            # Validate cluster index
+            if kmeans_cluster < 0 or kmeans_cluster >= n_clusters:
+                raise ValueError(f"Invalid cluster index {kmeans_cluster} for sample {i}. Must be in range [0, {n_clusters-1}]")
+
+            # Validate FCM memberships shape
+            if fcm_memberships.shape[1] != n_clusters:
+                raise ValueError(f"FCM memberships shape mismatch: expected {n_clusters} clusters, got {fcm_memberships.shape[1]}")
+
             # Truth: FCM membership for K-means assigned cluster
-            truth[i] = fcm_memberships[i, kmeans_cluster]
+            try:
+                truth[i] = fcm_memberships[i, kmeans_cluster]
+            except IndexError as e:
+                raise IndexError(f"Index error accessing fcm_memberships[{i}, {kmeans_cluster}]. FCM shape: {fcm_memberships.shape}") from e
             
             # Falsity: Complement of truth (sum of memberships to other clusters)
             falsity[i] = 1.0 - truth[i]
@@ -214,8 +232,12 @@ class NeutrosophicTransformer:
         
         return analysis
     
-    def _validate_inputs(self, kmeans_labels: np.ndarray, fcm_memberships: np.ndarray) -> None:
-        """Validate inputs for neutrosophic transformation."""
+    def _validate_inputs(self, kmeans_labels: np.ndarray, fcm_memberships: np.ndarray) -> np.ndarray:
+        """Validate inputs for neutrosophic transformation.
+
+        Returns:
+            Corrected kmeans_labels array
+        """
         # Check K-means labels
         if not isinstance(kmeans_labels, np.ndarray):
             raise TypeError("kmeans_labels must be a numpy array")
@@ -245,10 +267,17 @@ class NeutrosophicTransformer:
         if not np.allclose(row_sums, 1.0, atol=1e-6):
             logger.warning("FCM membership rows do not sum to 1.0 (may cause issues)")
         
+        # Ensure kmeans_labels are integers
+        if kmeans_labels.dtype != np.int32 and kmeans_labels.dtype != np.int64:
+            logger.warning(f"Converting kmeans_labels from {kmeans_labels.dtype} to int")
+            kmeans_labels = kmeans_labels.astype(int)
+
         # Check K-means label range
         n_clusters = fcm_memberships.shape[1]
         if np.any(kmeans_labels < 0) or np.any(kmeans_labels >= n_clusters):
             raise ValueError(f"K-means labels must be in range [0, {n_clusters-1}]")
+
+        return kmeans_labels
     
     def get_params(self) -> Dict[str, Any]:
         """Get transformer parameters."""
