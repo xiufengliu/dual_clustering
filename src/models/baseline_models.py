@@ -329,11 +329,20 @@ class LSTMForecaster(BaseForecaster):
     def _create_sequences(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Create sequences for LSTM training."""
         X_seq, y_seq = [], []
+
+        # Ensure X is 2D
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+
         # Ensure we have enough data for at least one sequence
         if len(X) < self.sequence_length:
             # If not enough data, repeat the last value
-            X_padded = np.vstack([X] + [X[-1:]] * (self.sequence_length - len(X)))
-            y_padded = np.concatenate([y, [y[-1]] * (self.sequence_length - len(y))])
+            last_X = X[-1:].reshape(1, -1)  # Ensure same shape
+            padding_needed = self.sequence_length - len(X)
+            X_padding = np.repeat(last_X, padding_needed, axis=0)
+            X_padded = np.vstack([X, X_padding])
+
+            y_padded = np.concatenate([y, [y[-1]] * padding_needed])
             X, y = X_padded, y_padded
 
         for i in range(self.sequence_length, len(X)):
@@ -343,8 +352,17 @@ class LSTMForecaster(BaseForecaster):
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> 'LSTMForecaster':
         """Fit LSTM model."""
-        # Create sequences
-        X_seq, y_seq = self._create_sequences(X, y)
+        # For LSTM, we expect X to be lag features from create_features
+        # X shape: (n_samples, n_lags), we need to convert this to sequences
+
+        # If X has multiple features (lag features), we use them directly as sequences
+        if X.shape[1] > 1:
+            # X is already in the format we need: (n_samples, sequence_length)
+            X_seq = X.reshape(X.shape[0], X.shape[1], 1)  # Add feature dimension
+            y_seq = y
+        else:
+            # X is single feature, create sequences the old way
+            X_seq, y_seq = self._create_sequences(X, y)
 
         # Convert to PyTorch tensors
         X_tensor = torch.FloatTensor(X_seq).to(self.device)
@@ -354,8 +372,8 @@ class LSTMForecaster(BaseForecaster):
         dataset = TensorDataset(X_tensor, y_tensor)
         dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
-        # Build model
-        input_size = X.shape[1]
+        # Build model - input size is 1 (single feature per timestep)
+        input_size = 1
         self.model = LSTMNet(input_size, self.lstm_units, self.dense_units).to(self.device)
 
         # Define loss and optimizer
@@ -396,6 +414,19 @@ class LSTMForecaster(BaseForecaster):
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
 
+        # If X has multiple features (lag features), use them directly
+        if X.shape[1] > 1:
+            # X is already in sequence format: (n_samples, sequence_length)
+            X_seq = X.reshape(X.shape[0], X.shape[1], 1)  # Add feature dimension
+            X_tensor = torch.FloatTensor(X_seq).to(self.device)
+
+            self.model.eval()
+            with torch.no_grad():
+                predictions = self.model(X_tensor).cpu().numpy().flatten()
+
+            return predictions
+
+        # Original sliding window approach for single feature input
         expected_length = len(X)
 
         # For small datasets, use simple approach
@@ -508,11 +539,20 @@ class CNNLSTMForecaster(BaseForecaster):
     def _create_sequences(self, X: np.ndarray, y: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         """Create sequences for CNN-LSTM training."""
         X_seq, y_seq = [], []
+
+        # Ensure X is 2D
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+
         # Ensure we have enough data for at least one sequence
         if len(X) < self.sequence_length:
             # If not enough data, repeat the last value
-            X_padded = np.vstack([X] + [X[-1:]] * (self.sequence_length - len(X)))
-            y_padded = np.concatenate([y, [y[-1]] * (self.sequence_length - len(y))])
+            last_X = X[-1:].reshape(1, -1)  # Ensure same shape
+            padding_needed = self.sequence_length - len(X)
+            X_padding = np.repeat(last_X, padding_needed, axis=0)
+            X_padded = np.vstack([X, X_padding])
+
+            y_padded = np.concatenate([y, [y[-1]] * padding_needed])
             X, y = X_padded, y_padded
 
         for i in range(self.sequence_length, len(X)):
@@ -522,8 +562,17 @@ class CNNLSTMForecaster(BaseForecaster):
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> 'CNNLSTMForecaster':
         """Fit CNN-LSTM model."""
-        # Create sequences
-        X_seq, y_seq = self._create_sequences(X, y)
+        # For CNN-LSTM, we expect X to be lag features from create_features
+        # X shape: (n_samples, n_lags), we need to convert this to sequences
+
+        # If X has multiple features (lag features), we use them directly as sequences
+        if X.shape[1] > 1:
+            # X is already in the format we need: (n_samples, sequence_length)
+            X_seq = X.reshape(X.shape[0], X.shape[1], 1)  # Add feature dimension
+            y_seq = y
+        else:
+            # X is single feature, create sequences the old way
+            X_seq, y_seq = self._create_sequences(X, y)
 
         # Convert to PyTorch tensors
         X_tensor = torch.FloatTensor(X_seq).to(self.device)
@@ -533,8 +582,8 @@ class CNNLSTMForecaster(BaseForecaster):
         dataset = TensorDataset(X_tensor, y_tensor)
         dataloader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
-        # Build model
-        input_size = X.shape[1]
+        # Build model - input size is 1 (single feature per timestep)
+        input_size = 1
         self.model = CNNLSTMNet(input_size, self.cnn_filters, self.kernel_size,
                                self.lstm_units, self.dense_units).to(self.device)
 
@@ -576,6 +625,19 @@ class CNNLSTMForecaster(BaseForecaster):
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
 
+        # If X has multiple features (lag features), use them directly
+        if X.shape[1] > 1:
+            # X is already in sequence format: (n_samples, sequence_length)
+            X_seq = X.reshape(X.shape[0], X.shape[1], 1)  # Add feature dimension
+            X_tensor = torch.FloatTensor(X_seq).to(self.device)
+
+            self.model.eval()
+            with torch.no_grad():
+                predictions = self.model(X_tensor).cpu().numpy().flatten()
+
+            return predictions
+
+        # Original sliding window approach for single feature input
         expected_length = len(X)
 
         # For small datasets, use simple approach
@@ -681,12 +743,20 @@ class NBeatsForecaster(BaseForecaster):
         """Create sequences for N-BEATS training."""
         X_seq, y_seq = [], []
 
+        # Ensure X is 2D
+        if X.ndim == 1:
+            X = X.reshape(-1, 1)
+
         # Ensure we have enough data for at least one sequence
         min_length = self.backcast_length + self.forecast_length
         if len(X) < min_length:
             # If not enough data, repeat the last value
-            X_padded = np.vstack([X] + [X[-1:]] * (min_length - len(X)))
-            y_padded = np.concatenate([y, [y[-1]] * (min_length - len(y))])
+            last_X = X[-1:].reshape(1, -1)  # Ensure same shape
+            padding_needed = min_length - len(X)
+            X_padding = np.repeat(last_X, padding_needed, axis=0)
+            X_padded = np.vstack([X, X_padding])
+
+            y_padded = np.concatenate([y, [y[-1]] * padding_needed])
             X, y = X_padded, y_padded
 
         for i in range(self.backcast_length, len(X) - self.forecast_length + 1):
