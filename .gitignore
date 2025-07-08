@@ -138,6 +138,9 @@ data/external/*
 !data/interim/.gitkeep
 !data/external/.gitkeep
 
+# Allow processed datasets (clean, ready-to-use datasets for experiments)
+!data/processed/*.csv
+
 results/
 logs/
 *.pkl

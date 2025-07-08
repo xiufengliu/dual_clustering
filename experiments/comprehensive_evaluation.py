@@ -484,55 +484,33 @@ class ComprehensiveEvaluation:
         Returns:
             Tuple of (train_data, val_data, test_data)
         """
-        # Map dataset names to data loading parameters
+        # Map dataset names to processed data files
         dataset_configs = {
-            'entso_e_solar': {
-                'dataset_type': 'solar',
-                'country': 'Denmark',
-                'start_date': '2019-01-01',
-                'end_date': '2023-10-03'
-            },
-            'entso_e_wind': {
-                'dataset_type': 'wind',
-                'country': 'Spain',
-                'start_date': '2019-01-01',
-                'end_date': '2023-10-03'
-            },
-            'gefcom2014_solar': {
-                'dataset_type': 'solar',
-                'source': 'gefcom2014',
-                'start_date': '2020-01-01',
-                'end_date': '2021-12-31'
-            },
-            'gefcom2014_wind': {
-                'dataset_type': 'wind',
-                'source': 'gefcom2014',
-                'start_date': '2020-01-01',
-                'end_date': '2022-12-31'
-            },
-            'nrel_solar': {
-                'dataset_type': 'solar',
-                'source': 'nrel',
-                'region': 'California',
-                'start_date': '2021-01-01',
-                'end_date': '2023-12-31'
-            },
-            'nrel_wind': {
-                'dataset_type': 'wind',
-                'source': 'nrel',
-                'region': 'Texas',
-                'start_date': '2021-01-01',
-                'end_date': '2023-12-31'
-            }
+            'gefcom2014_energy': 'gefcom2014_energy.csv',
+            'kaggle_solar_plant': 'kaggle_solar_plant.csv',
+            'kaggle_wind_power': 'kaggle_wind_power.csv',
+            'nrel_canada_wind': 'nrel_canada_wind.csv',
+            'uk_sheffield_solar': 'uk_sheffield_solar.csv',
+            'entso_e_load': 'entso_e_load_fixed.csv',
+            'combined_solar_data': 'combined_solar_data.csv',
+            'combined_wind_data': 'combined_wind_data.csv',
+            'combined_load_data': 'combined_load_data.csv',
+            # Legacy synthetic datasets for backward compatibility
+            'entso_e_solar': 'entso_e_solar.csv',
+            'entso_e_wind': 'entso_e_wind.csv',
+            'gefcom2014_solar': 'gefcom2014_solar.csv',
+            'gefcom2014_wind': 'gefcom2014_wind.csv',
+            'nrel_solar': 'nrel_solar.csv',
+            'nrel_wind': 'nrel_wind.csv'
         }
 
         if dataset_name not in dataset_configs:
-            raise ValueError(f"Unknown dataset: {dataset_name}")
+            raise ValueError(f"Unknown dataset: {dataset_name}. Available: {list(dataset_configs.keys())}")
 
-        config = dataset_configs[dataset_name]
+        filename = dataset_configs[dataset_name]
 
         # Load data from processed files
-        data_file = Path("data/processed") / f"{dataset_name}.csv"
+        data_file = Path("data/processed") / filename
         if not data_file.exists():
             raise FileNotFoundError(f"Processed data file not found: {data_file}")
 

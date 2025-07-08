@@ -227,32 +227,32 @@ def run_experiments(experiment_type: str = "quick"):
     logger.info(f"Running {experiment_type} experiments...")
     
     if experiment_type == "quick":
-        # Run a subset of experiments for testing
+        # Run a subset of experiments for testing with real data
         cmd = [
             sys.executable, "experiments/comprehensive_evaluation.py",
             "--config", "benchmark_config",
-            "--datasets", "entso_e_solar",
+            "--datasets", "kaggle_solar_plant",
             "--skip-computational",
             "--skip-cross-dataset",
             "--skip-robustness"
         ]
     elif experiment_type == "main":
-        # Run main comparison experiments only
+        # Run main comparison experiments with diverse real datasets
         cmd = [
             sys.executable, "experiments/comprehensive_evaluation.py",
             "--config", "benchmark_config",
-            "--datasets", "entso_e_solar", "entso_e_wind", "gefcom2014_solar",
+            "--datasets", "kaggle_solar_plant", "kaggle_wind_power", "gefcom2014_energy",
             "--skip-sensitivity",
-            "--skip-computational", 
+            "--skip-computational",
             "--skip-cross-dataset",
             "--skip-robustness"
         ]
     elif experiment_type == "full":
-        # Run all experiments
+        # Run all experiments with comprehensive real datasets
         cmd = [
             sys.executable, "experiments/comprehensive_evaluation.py",
             "--config", "benchmark_config",
-            "--datasets", "entso_e_solar", "entso_e_wind", "gefcom2014_solar"
+            "--datasets", "combined_solar_data", "combined_wind_data", "combined_load_data"
         ]
     else:
         logger.error(f"Unknown experiment type: {experiment_type}")
