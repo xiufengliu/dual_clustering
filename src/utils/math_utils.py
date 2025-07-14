@@ -130,21 +130,27 @@ def normalize_entropy(entropy: float, n_classes: int, base: float = 2.0) -> floa
     return entropy / max_entropy
 
 
-def safe_divide(numerator: np.ndarray, denominator: np.ndarray, 
+def safe_divide(numerator: np.ndarray, denominator: np.ndarray,
                 default_value: float = 0.0) -> np.ndarray:
     """Perform safe division with handling of zero denominators.
-    
+
     Args:
         numerator: Numerator array
         denominator: Denominator array
         default_value: Value to use when denominator is zero
-        
+
     Returns:
         Result of safe division
     """
-    result = np.full_like(numerator, default_value, dtype=float)
-    mask = denominator != 0
-    result[mask] = numerator[mask] / denominator[mask]
+    # Handle broadcasting issues by using numpy's built-in division with where
+    with np.errstate(divide='ignore', invalid='ignore'):
+        result = np.divide(numerator, denominator,
+                          out=np.full_like(numerator, default_value, dtype=float),
+                          where=(denominator != 0))
+
+    # Set default value where denominator is zero
+    result = np.where(denominator != 0, result, default_value)
+
     return result
 
 

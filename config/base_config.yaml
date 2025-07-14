@@ -10,8 +10,8 @@ data:
 clustering:
   n_clusters: 5
   fcm_fuzziness: 2.0
-  max_iter: 100
-  tol: 0.0001
+  max_iter: 300
+  tol: 0.001
   random_state: 42
   
 neutrosophic:

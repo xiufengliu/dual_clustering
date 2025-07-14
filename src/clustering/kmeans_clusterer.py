@@ -77,23 +77,30 @@ class KMeansClusterer(BaseClusterer):
     
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict cluster assignments for new data.
-        
+
         Args:
             X: Input data array of shape (n_samples, n_features)
-            
+
         Returns:
             Cluster assignments array of shape (n_samples,)
         """
         if not self.is_fitted:
             raise ValueError("KMeansClusterer must be fitted before prediction")
-        
+
         self.validate_input(X)
-        
+
         # Reshape if 1D
         if X.ndim == 1:
             X = X.reshape(-1, 1)
-        
-        return self.kmeans.predict(X)
+
+        labels = self.kmeans.predict(X)
+
+        # Ensure labels are integers
+        if labels.dtype.kind not in ['i', 'u']:
+            logger.warning(f"K-means labels have non-integer dtype: {labels.dtype}. Converting to int.")
+            labels = labels.astype(int)
+
+        return labels
     
     def fit_predict(self, X: np.ndarray) -> np.ndarray:
         """Fit K-Means and predict cluster assignments.

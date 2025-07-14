@@ -140,15 +140,27 @@ class NeutrosophicForecastingFramework:
         
         # Stage 3: Neutrosophic Transformation
         self.logger.info("Stage 3: Neutrosophic transformation")
-        kmeans_labels, fcm_memberships = self.dual_clusterer.get_cluster_assignments()
-        self.neutrosophic_components = self.neutrosophic_transformer.transform(
-            kmeans_labels, fcm_memberships
-        )
-        
-        # Create enriched feature set
-        enriched_features = self.neutrosophic_transformer.create_enriched_features(
-            X, integrated_features, self.neutrosophic_components
-        )
+        try:
+            kmeans_labels, fcm_memberships = self.dual_clusterer.get_cluster_assignments()
+
+            # Log data types for debugging
+            self.logger.debug(f"K-means labels dtype: {kmeans_labels.dtype}, shape: {kmeans_labels.shape}")
+            self.logger.debug(f"FCM memberships dtype: {fcm_memberships.dtype}, shape: {fcm_memberships.shape}")
+
+            self.neutrosophic_components = self.neutrosophic_transformer.transform(
+                kmeans_labels, fcm_memberships
+            )
+
+            # Create enriched feature set
+            enriched_features = self.neutrosophic_transformer.create_enriched_features(
+                X, integrated_features, self.neutrosophic_components
+            )
+
+        except Exception as e:
+            self.logger.error(f"Neutrosophic transformation failed: {e}")
+            self.logger.error(f"X dtype: {X.dtype}, shape: {X.shape}")
+            self.logger.error(f"Integrated features dtype: {integrated_features.dtype}, shape: {integrated_features.shape}")
+            raise RuntimeError(f"Neutrosophic transformation stage failed: {e}") from e
         
         # Generate feature names
         n_clusters = self.config.get('clustering', {}).get('n_clusters', 5)

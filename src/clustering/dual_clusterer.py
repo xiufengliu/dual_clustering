@@ -66,19 +66,55 @@ class DualClusterer:
         if X.ndim == 1:
             X = X.reshape(-1, 1)
         
-        # Fit K-Means
-        logger.info("Fitting K-Means clusterer")
-        self.kmeans_clusterer.fit(X)
-        
-        # Fit FCM
-        logger.info("Fitting FCM clusterer")
-        self.fcm_clusterer.fit(X)
-        
-        # Generate integrated features
-        self.integrated_features_ = self._create_integrated_features()
-        
-        self.is_fitted = True
-        logger.info("Dual clustering fitting completed")
+        try:
+            # Fit K-Means
+            logger.info("Fitting K-Means clusterer")
+            self.kmeans_clusterer.fit(X)
+            logger.debug("K-Means clusterer fitted successfully")
+
+            # Fit FCM
+            logger.info("Fitting FCM clusterer")
+            self.fcm_clusterer.fit(X)
+            logger.debug("FCM clusterer fitted successfully")
+
+            # Generate integrated features
+            self.integrated_features_ = self._create_integrated_features()
+
+            self.is_fitted = True
+            logger.info("Dual clustering fitting completed")
+
+        except Exception as e:
+            logger.error(f"Failed to fit dual clusterer: {e}")
+            # Try with simpler parameters
+            logger.warning("Attempting to fit with relaxed parameters")
+            try:
+                # Reset clusterers with more relaxed parameters
+                from .kmeans_clusterer import KMeansClusterer
+                from .fcm_clusterer import FCMClusterer
+
+                self.kmeans_clusterer = KMeansClusterer(
+                    n_clusters=min(self.n_clusters, max(2, len(X)//10)),
+                    max_iter=100,
+                    tol=0.01,
+                    random_state=self.random_state
+                )
+                self.fcm_clusterer = FCMClusterer(
+                    n_clusters=min(self.n_clusters, max(2, len(X)//10)),
+                    m=2.0,
+                    max_iter=100,
+                    tol=0.01,
+                    random_state=self.random_state
+                )
+
+                self.kmeans_clusterer.fit(X)
+                self.fcm_clusterer.fit(X)
+                self.integrated_features_ = self._create_integrated_features()
+                self.is_fitted = True
+                logger.warning("Dual clusterer fitted with relaxed parameters")
+
+            except Exception as e2:
+                logger.error(f"Failed to fit dual clusterer even with relaxed parameters: {e2}")
+                raise RuntimeError(f"Dual clusterer fitting failed: {e2}") from e2
         
         return self
     
@@ -118,17 +154,38 @@ class DualClusterer:
     
     def get_cluster_assignments(self) -> Tuple[np.ndarray, np.ndarray]:
         """Get cluster assignments from fitted clusterers.
-        
+
         Returns:
             Tuple of (kmeans_labels, fcm_memberships)
         """
         if not self.is_fitted:
             raise ValueError("DualClusterer must be fitted before accessing assignments")
-        
-        kmeans_labels = self.kmeans_clusterer.labels_
-        fcm_memberships = self.fcm_clusterer.get_membership_matrix()
-        
-        return kmeans_labels, fcm_memberships
+
+        try:
+            kmeans_labels = self.kmeans_clusterer.labels_
+            fcm_memberships = self.fcm_clusterer.get_membership_matrix()
+
+            # Ensure proper data types
+            if kmeans_labels.dtype.kind not in ['i', 'u']:
+                logger.warning(f"K-means labels have non-integer dtype: {kmeans_labels.dtype}. Converting to int.")
+                kmeans_labels = kmeans_labels.astype(int)
+
+            if fcm_memberships.dtype != np.float64:
+                logger.warning(f"FCM memberships have dtype: {fcm_memberships.dtype}. Converting to float64.")
+                fcm_memberships = fcm_memberships.astype(np.float64)
+
+            # Validate shapes and values
+            if len(kmeans_labels) != fcm_memberships.shape[0]:
+                raise ValueError(f"Shape mismatch: kmeans_labels={len(kmeans_labels)}, fcm_memberships={fcm_memberships.shape[0]}")
+
+            if fcm_memberships.shape[1] != self.n_clusters:
+                raise ValueError(f"FCM memberships have wrong number of clusters: {fcm_memberships.shape[1]} != {self.n_clusters}")
+
+            return kmeans_labels, fcm_memberships
+
+        except Exception as e:
+            logger.error(f"Failed to get cluster assignments: {e}")
+            raise RuntimeError(f"Cluster assignment retrieval failed: {e}") from e
     
     def get_integrated_features(self) -> np.ndarray:
         """Get integrated cluster features as per Proposition 2 from the paper.
@@ -144,24 +201,49 @@ class DualClusterer:
     
     def _create_integrated_features(self) -> np.ndarray:
         """Create integrated cluster features as described in the paper.
-        
+
         Implementation of Proposition 2: f_i^cluster = [one_hot(k_i), u_i]
-        
+
         Returns:
             Integrated feature matrix
         """
-        kmeans_labels, fcm_memberships = self.get_cluster_assignments()
+        # Get cluster assignments directly from clusterers (avoid circular dependency)
+        kmeans_labels = self.kmeans_clusterer.labels_
+        fcm_memberships = self.fcm_clusterer.get_membership_matrix()
         n_samples = len(kmeans_labels)
-        
+
+        # Ensure kmeans_labels are integers
+        if kmeans_labels.dtype.kind not in ['i', 'u']:  # not integer or unsigned integer
+            logger.warning(f"K-means labels have non-integer dtype: {kmeans_labels.dtype}. Converting to int.")
+            try:
+                kmeans_labels = kmeans_labels.astype(int)
+            except Exception as e:
+                raise ValueError(f"Failed to convert K-means labels to integers: {e}") from e
+
+        # Validate label range
+        if np.any(kmeans_labels < 0) or np.any(kmeans_labels >= self.n_clusters):
+            raise ValueError(f"K-means labels out of range [0, {self.n_clusters-1}]: min={np.min(kmeans_labels)}, max={np.max(kmeans_labels)}")
+
+        # Ensure FCM memberships are numeric
+        if fcm_memberships.dtype.kind not in ['f', 'i', 'u']:  # not float, int, or unsigned int
+            logger.warning(f"FCM memberships have non-numeric dtype: {fcm_memberships.dtype}. Converting to float64.")
+            try:
+                fcm_memberships = fcm_memberships.astype(np.float64)
+            except Exception as e:
+                raise ValueError(f"Failed to convert FCM memberships to float64: {e}") from e
+
         # Create one-hot encoding for K-Means labels
-        one_hot_kmeans = np.zeros((n_samples, self.n_clusters))
-        one_hot_kmeans[np.arange(n_samples), kmeans_labels] = 1
-        
+        one_hot_kmeans = np.zeros((n_samples, self.n_clusters), dtype=np.float64)
+        one_hot_kmeans[np.arange(n_samples), kmeans_labels] = 1.0
+
+        # Ensure FCM memberships are float64
+        fcm_memberships = fcm_memberships.astype(np.float64)
+
         # Concatenate one-hot K-Means with FCM memberships
         integrated_features = np.concatenate([one_hot_kmeans, fcm_memberships], axis=1)
-        
-        logger.info(f"Created integrated features with shape {integrated_features.shape}")
-        
+
+        logger.info(f"Created integrated features with shape {integrated_features.shape} and dtype {integrated_features.dtype}")
+
         return integrated_features
     
     def get_cluster_centers(self) -> Tuple[np.ndarray, np.ndarray]:

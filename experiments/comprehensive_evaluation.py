@@ -679,6 +679,7 @@ class ComprehensiveEvaluation:
 
             # Train model
             start_time = time.time()
+            logger.info(f"Training data shape: {train_data.shape}, dtypes: {train_data.dtypes.to_dict()}")
             framework.fit(train_data)
             training_time = time.time() - start_time
 
@@ -710,7 +711,15 @@ class ComprehensiveEvaluation:
             return results
 
         except Exception as e:
-            logger.error(f"Failed to run proposed model: {e}")
+            error_msg = str(e)
+            if "ufunc 'add' did not contain a loop with signature matching types" in error_msg:
+                logger.error(f"Data type mismatch error in proposed model: {e}")
+                logger.error("This indicates mixed data types (float64 and string) in array operations")
+                logger.error(f"Train data info: shape={train_data.shape}, columns={list(train_data.columns)}")
+                logger.error(f"Test data info: shape={test_data.shape}, columns={list(test_data.columns)}")
+            else:
+                logger.error(f"Failed to run proposed model: {e}")
+
             return {'error': str(e), 'failed': True}
 
     def run_linear_baseline(self, train_data: pd.DataFrame, test_data: pd.DataFrame) -> Dict[str, Any]:

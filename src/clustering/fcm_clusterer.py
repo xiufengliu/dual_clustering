@@ -144,20 +144,31 @@ class FCMClusterer(BaseClusterer):
     
     def _initialize_membership_matrix(self, n_samples: int) -> np.ndarray:
         """Initialize membership matrix randomly.
-        
+
         Args:
             n_samples: Number of data samples
-            
+
         Returns:
             Initial membership matrix of shape (n_samples, n_clusters)
         """
         # Random initialization
         membership_matrix = np.random.rand(n_samples, self.n_clusters)
-        
+
         # Normalize so each row sums to 1
         row_sums = np.sum(membership_matrix, axis=1, keepdims=True)
+
+        # Debug information
+        logger.debug(f"FCM initialization - membership_matrix shape: {membership_matrix.shape}")
+        logger.debug(f"FCM initialization - row_sums shape: {row_sums.shape}")
+        logger.debug(f"FCM initialization - n_clusters: {self.n_clusters}")
+
+        # Use safe division with proper broadcasting
         membership_matrix = safe_divide(membership_matrix, row_sums, default_value=1.0/self.n_clusters)
-        
+
+        # Validate the result
+        if not np.allclose(np.sum(membership_matrix, axis=1), 1.0, atol=1e-6):
+            logger.warning("Membership matrix rows do not sum to 1 after normalization")
+
         return membership_matrix
     
     def _update_cluster_centers(self, X: np.ndarray, membership_matrix: np.ndarray) -> np.ndarray:
@@ -176,7 +187,11 @@ class FCMClusterer(BaseClusterer):
         # Calculate weighted sums
         numerator = np.dot(membership_powered.T, X)
         denominator = np.sum(membership_powered, axis=0, keepdims=True).T
-        
+
+        # Debug information
+        logger.debug(f"FCM center update - numerator shape: {numerator.shape}")
+        logger.debug(f"FCM center update - denominator shape: {denominator.shape}")
+
         # Compute centers with safe division
         centers = safe_divide(numerator, denominator, default_value=0.0)
         
@@ -239,14 +254,30 @@ class FCMClusterer(BaseClusterer):
     
     def get_membership_matrix(self) -> np.ndarray:
         """Get the membership matrix.
-        
+
         Returns:
             Membership matrix of shape (n_samples, n_clusters)
         """
         if not self.is_fitted:
             raise ValueError("FCMClusterer must be fitted before accessing membership matrix")
-        
-        return self.membership_matrix_
+
+        # Ensure membership matrix is float64 and contains valid values
+        membership_matrix = self.membership_matrix_.astype(np.float64)
+
+        # Validate membership matrix
+        if not np.all(np.isfinite(membership_matrix)):
+            logger.warning("Membership matrix contains non-finite values. Replacing with normalized values.")
+            # Replace non-finite values with uniform distribution
+            mask = ~np.isfinite(membership_matrix)
+            membership_matrix[mask] = 1.0 / self.n_clusters
+
+        # Ensure rows sum to 1 (normalize if needed)
+        row_sums = np.sum(membership_matrix, axis=1)
+        if not np.allclose(row_sums, 1.0, atol=1e-6):
+            logger.warning("Membership matrix rows do not sum to 1.0. Normalizing.")
+            membership_matrix = membership_matrix / row_sums[:, np.newaxis]
+
+        return membership_matrix
     
     def get_hard_clusters(self) -> np.ndarray:
         """Get hard cluster assignments (most likely cluster for each point).

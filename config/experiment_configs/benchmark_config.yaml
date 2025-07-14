@@ -85,8 +85,8 @@ baseline_models:
 clustering:
   n_clusters: 5
   fcm_fuzziness: 2.0
-  max_iter: 100
-  tol: 0.0001
+  max_iter: 300
+  tol: 0.001
 
 neutrosophic:
   entropy_epsilon: 1e-9

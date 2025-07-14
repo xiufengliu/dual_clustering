@@ -59,20 +59,25 @@ class NeutrosophicTransformer:
         
     def transform(self, kmeans_labels: np.ndarray, fcm_memberships: np.ndarray) -> NeutrosophicComponents:
         """Transform dual clustering outputs to neutrosophic components.
-        
+
         Implementation of Definition 3 from the paper:
         - T(y_i) = u_{i,k_i} (FCM membership for K-means assigned cluster)
         - F(y_i) = 1 - T(y_i) (Complement of truth)
         - I(y_i) = H(u_i) / log_2(C) (Normalized Shannon entropy)
-        
+
         Args:
             kmeans_labels: K-means cluster assignments of shape (n_samples,)
             fcm_memberships: FCM membership matrix of shape (n_samples, n_clusters)
-            
+
         Returns:
             NeutrosophicComponents containing T, I, F arrays
         """
+        # Validate and ensure proper data types
         kmeans_labels = self._validate_inputs(kmeans_labels, fcm_memberships)
+
+        # Additional dtype validation and conversion
+        kmeans_labels = self._ensure_numeric_array(kmeans_labels, "kmeans_labels").astype(int)
+        fcm_memberships = self._ensure_numeric_array(fcm_memberships, "fcm_memberships")
         
         n_samples, n_clusters = fcm_memberships.shape
         
@@ -136,31 +141,50 @@ class NeutrosophicTransformer:
         self.is_fitted = True
         return self.transform(kmeans_labels, fcm_memberships)
     
-    def create_enriched_features(self, original_features: np.ndarray, 
+    def create_enriched_features(self, original_features: np.ndarray,
                                integrated_cluster_features: np.ndarray,
                                neutrosophic_components: NeutrosophicComponents) -> np.ndarray:
         """Create enriched feature set combining original, cluster, and neutrosophic features.
-        
+
         Args:
             original_features: Original input features
             integrated_cluster_features: Dual clustering features [one_hot_kmeans, fcm_memberships]
             neutrosophic_components: Neutrosophic components (T, I, F)
-            
+
         Returns:
             Enriched feature matrix
         """
+        # Ensure all inputs are numeric arrays with consistent dtype
+        original_features = self._ensure_numeric_array(original_features, "original_features")
+        integrated_cluster_features = self._ensure_numeric_array(integrated_cluster_features, "integrated_cluster_features")
+
         # Convert neutrosophic components to array
         neutrosophic_array = neutrosophic_components.to_array()
-        
-        # Concatenate all features
-        enriched_features = np.concatenate([
-            original_features,
-            integrated_cluster_features,
-            neutrosophic_array
-        ], axis=1)
-        
-        logger.info(f"Created enriched features with shape {enriched_features.shape}")
-        
+        neutrosophic_array = self._ensure_numeric_array(neutrosophic_array, "neutrosophic_array")
+
+        # Ensure all arrays have the same number of samples
+        n_samples = original_features.shape[0]
+        if integrated_cluster_features.shape[0] != n_samples:
+            raise ValueError(f"Mismatch in number of samples: original_features={n_samples}, integrated_cluster_features={integrated_cluster_features.shape[0]}")
+        if neutrosophic_array.shape[0] != n_samples:
+            raise ValueError(f"Mismatch in number of samples: original_features={n_samples}, neutrosophic_array={neutrosophic_array.shape[0]}")
+
+        # Concatenate all features with explicit dtype conversion
+        try:
+            enriched_features = np.concatenate([
+                original_features.astype(np.float64),
+                integrated_cluster_features.astype(np.float64),
+                neutrosophic_array.astype(np.float64)
+            ], axis=1)
+        except Exception as e:
+            logger.error(f"Failed to concatenate features. Shapes: original={original_features.shape}, "
+                        f"integrated={integrated_cluster_features.shape}, neutrosophic={neutrosophic_array.shape}")
+            logger.error(f"Data types: original={original_features.dtype}, "
+                        f"integrated={integrated_cluster_features.dtype}, neutrosophic={neutrosophic_array.dtype}")
+            raise ValueError(f"Feature concatenation failed: {e}") from e
+
+        logger.info(f"Created enriched features with shape {enriched_features.shape} and dtype {enriched_features.dtype}")
+
         return enriched_features
     
     def get_feature_names(self, original_feature_names: list, n_clusters: int) -> list:
@@ -278,7 +302,72 @@ class NeutrosophicTransformer:
             raise ValueError(f"K-means labels must be in range [0, {n_clusters-1}]")
 
         return kmeans_labels
-    
+
+    def _ensure_numeric_array(self, array: np.ndarray, array_name: str) -> np.ndarray:
+        """Ensure array is numeric and handle dtype conversion issues.
+
+        Args:
+            array: Input array to validate and convert
+            array_name: Name of the array for error reporting
+
+        Returns:
+            Numeric array with consistent dtype
+
+        Raises:
+            ValueError: If array cannot be converted to numeric
+        """
+        if not isinstance(array, np.ndarray):
+            try:
+                array = np.array(array)
+            except Exception as e:
+                raise ValueError(f"{array_name} cannot be converted to numpy array: {e}") from e
+
+        # Check if array contains non-numeric data
+        if array.dtype.kind in ['U', 'S', 'O']:  # Unicode, byte string, or object
+            logger.warning(f"{array_name} contains non-numeric data (dtype: {array.dtype}). Attempting conversion.")
+
+            # Try to convert to numeric
+            try:
+                # Flatten, convert, then reshape
+                original_shape = array.shape
+                flat_array = array.flatten()
+
+                # Convert each element to float, handling strings and other types
+                numeric_values = []
+                for item in flat_array:
+                    if isinstance(item, (str, bytes)):
+                        # Try to parse as number
+                        try:
+                            numeric_values.append(float(item))
+                        except (ValueError, TypeError):
+                            # If it's a string that can't be converted, use 0.0 as default
+                            logger.warning(f"Cannot convert '{item}' to numeric, using 0.0")
+                            numeric_values.append(0.0)
+                    elif np.isnan(item) or np.isinf(item):
+                        # Handle NaN and inf values
+                        numeric_values.append(0.0)
+                    else:
+                        numeric_values.append(float(item))
+
+                array = np.array(numeric_values).reshape(original_shape)
+
+            except Exception as e:
+                raise ValueError(f"Failed to convert {array_name} to numeric: {e}") from e
+
+        # Ensure array is float64
+        if array.dtype != np.float64:
+            try:
+                array = array.astype(np.float64)
+            except Exception as e:
+                raise ValueError(f"Failed to convert {array_name} to float64: {e}") from e
+
+        # Check for any remaining non-finite values
+        if not np.all(np.isfinite(array)):
+            logger.warning(f"{array_name} contains non-finite values. Replacing with 0.0")
+            array = np.where(np.isfinite(array), array, 0.0)
+
+        return array
+
     def get_params(self) -> Dict[str, Any]:
         """Get transformer parameters."""
         return {

@@ -766,11 +766,19 @@ class NBeatsForecaster(BaseForecaster):
 
     def fit(self, X: np.ndarray, y: np.ndarray) -> 'NBeatsForecaster':
         """Fit N-BEATS model (simplified)."""
-        # Create sequences
-        X_seq, y_seq = self._create_sequences(X, y)
+        # For N-BEATS, we expect X to be lag features from create_features
+        # X shape: (n_samples, n_lags), we need to convert this to sequences
 
-        # Flatten sequences for N-BEATS
-        X_flat = X_seq.reshape(X_seq.shape[0], -1)
+        # If X has multiple features (lag features), we use them directly as sequences
+        if X.shape[1] > 1:
+            # X is already in the format we need: (n_samples, sequence_length)
+            X_flat = X  # Use lag features directly
+            y_seq = y
+        else:
+            # X is single feature, create sequences the old way
+            X_seq, y_seq = self._create_sequences(X, y)
+            # Flatten sequences for N-BEATS
+            X_flat = X_seq.reshape(X_seq.shape[0], -1)
 
         # Convert to PyTorch tensors
         X_tensor = torch.FloatTensor(X_flat).to(self.device)
@@ -822,6 +830,19 @@ class NBeatsForecaster(BaseForecaster):
         if not self.is_fitted:
             raise ValueError("Model must be fitted before prediction")
 
+        # If X has multiple features (lag features), use them directly
+        if X.shape[1] > 1:
+            # X is already in sequence format: (n_samples, sequence_length)
+            X_flat = X  # Use lag features directly
+            X_tensor = torch.FloatTensor(X_flat).to(self.device)
+
+            self.model.eval()
+            with torch.no_grad():
+                predictions = self.model(X_tensor).cpu().numpy().flatten()
+
+            return predictions
+
+        # Original sliding window approach for single feature input
         expected_length = len(X)
 
         # For small datasets, use simple approach
