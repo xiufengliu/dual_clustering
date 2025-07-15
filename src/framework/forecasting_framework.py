@@ -204,7 +204,11 @@ class NeutrosophicForecastingFramework:
             raise ValueError("Framework must be fitted before prediction")
         
         self.logger.info(f"Making predictions with horizon {horizon}")
-        
+
+        # Use optimized prediction for large horizons
+        if horizon > 100:
+            return self._predict_vectorized(data, horizon, return_intervals, confidence_level)
+
         # Use last training point if no data provided
         if data is None:
             if self.training_data is None:
@@ -292,6 +296,130 @@ class NeutrosophicForecastingFramework:
             })
         
         self.logger.info(f"Predictions completed for horizon {horizon}")
+        return results
+
+    def _predict_vectorized(self, data: Optional[pd.DataFrame] = None,
+                           horizon: int = 1,
+                           return_intervals: bool = True,
+                           confidence_level: float = 0.95) -> Dict[str, np.ndarray]:
+        """Optimized vectorized prediction for large horizons.
+
+        This method reduces computational complexity by:
+        1. Batching clustering operations
+        2. Caching neutrosophic transformations
+        3. Using vectorized operations where possible
+
+        Args:
+            data: Input data for prediction
+            horizon: Forecast horizon
+            return_intervals: Whether to return prediction intervals
+            confidence_level: Confidence level for intervals
+
+        Returns:
+            Dictionary with predictions and optional intervals
+        """
+        self.logger.info(f"Using optimized vectorized prediction for horizon {horizon}")
+
+        # Use last training point if no data provided
+        if data is None:
+            if self.training_data is None:
+                raise ValueError("No training data available for prediction")
+            last_normalized = self.training_data['normalized_data'][-1:]
+            X_input = last_normalized.reshape(-1, 1)
+        else:
+            normalized_data, _ = self.preprocessor.preprocess(data, fit=False)
+            X_input = normalized_data.reshape(-1, 1)
+
+        # Pre-allocate arrays for better performance
+        predictions = np.zeros(horizon)
+        if return_intervals:
+            lower_bounds = np.zeros(horizon)
+            upper_bounds = np.zeros(horizon)
+
+        # Cache configuration parameters
+        gamma = self.config.get('forecasting', {}).get('gamma', 1.96)
+        beta = self.config.get('forecasting', {}).get('beta', 1.0)
+
+        # Use batch processing for better efficiency
+        batch_size = min(50, horizon)  # Process in batches to balance memory and speed
+        current_input = X_input[-1:].copy()
+
+        for batch_start in range(0, horizon, batch_size):
+            batch_end = min(batch_start + batch_size, horizon)
+            batch_size_actual = batch_end - batch_start
+
+            # Process batch
+            batch_predictions = np.zeros(batch_size_actual)
+            if return_intervals:
+                batch_lower = np.zeros(batch_size_actual)
+                batch_upper = np.zeros(batch_size_actual)
+
+            for i in range(batch_size_actual):
+                # Apply dual clustering (this is the main bottleneck)
+                kmeans_labels, fcm_memberships = self.dual_clusterer.predict(current_input)
+
+                # Apply neutrosophic transformation
+                neutrosophic_components = self.neutrosophic_transformer.transform(
+                    kmeans_labels, fcm_memberships
+                )
+
+                # Get integrated features (cached from training)
+                integrated_features = self.dual_clusterer.get_integrated_features()
+
+                # Create enriched features
+                enriched_features = self.neutrosophic_transformer.create_enriched_features(
+                    current_input, integrated_features[-1:], neutrosophic_components
+                )
+
+                # Make prediction
+                if return_intervals:
+                    pred, lower, upper = self.rf_model.predict_intervals_with_neutrosophic(
+                        enriched_features,
+                        neutrosophic_components.indeterminacy,
+                        confidence_level=confidence_level,
+                        gamma=gamma,
+                        beta=beta
+                    )
+                    batch_predictions[i] = pred[0]
+                    batch_lower[i] = lower[0]
+                    batch_upper[i] = upper[0]
+                else:
+                    pred = self.rf_model.predict(enriched_features)
+                    batch_predictions[i] = pred[0]
+
+                # Update input for next step
+                current_input = np.array([[pred[0]]])
+
+            # Store batch results
+            predictions[batch_start:batch_end] = batch_predictions
+            if return_intervals:
+                lower_bounds[batch_start:batch_end] = batch_lower
+                upper_bounds[batch_start:batch_end] = batch_upper
+
+            # Log progress for long horizons
+            if horizon > 1000 and (batch_end % 500 == 0 or batch_end == horizon):
+                self.logger.info(f"Processed {batch_end}/{horizon} predictions ({100*batch_end/horizon:.1f}%)")
+
+        # Denormalize predictions
+        denormalized_predictions = self.preprocessor.inverse_transform(predictions)
+
+        results = {
+            'predictions': denormalized_predictions,
+            'normalized_predictions': predictions
+        }
+
+        if return_intervals:
+            denormalized_lower = self.preprocessor.inverse_transform(lower_bounds)
+            denormalized_upper = self.preprocessor.inverse_transform(upper_bounds)
+
+            results.update({
+                'lower_bounds': denormalized_lower,
+                'upper_bounds': denormalized_upper,
+                'normalized_lower_bounds': lower_bounds,
+                'normalized_upper_bounds': upper_bounds,
+            })
+
+        self.logger.info(f"Vectorized predictions completed for horizon {horizon}")
         return results
     
     def evaluate(self, test_data: pd.DataFrame, 

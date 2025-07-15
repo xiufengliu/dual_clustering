@@ -50,6 +50,7 @@ class DualClusterer:
         
         self.is_fitted = False
         self.integrated_features_ = None
+        self._prediction_cache = {}  # Cache for prediction results
         
     def fit(self, X: np.ndarray) -> 'DualClusterer':
         """Fit both K-Means and FCM to the data.

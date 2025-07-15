@@ -210,23 +210,50 @@ class FCMClusterer(BaseClusterer):
         n_samples = X.shape[0]
         membership_matrix = np.zeros((n_samples, self.n_clusters))
         
-        # Calculate distances from each point to each center
-        for i, point in enumerate(X):
-            distances = np.linalg.norm(point - centers, axis=1)
-            
-            # Handle case where point coincides with a center
-            if np.any(distances == 0):
-                zero_indices = np.where(distances == 0)[0]
-                membership_matrix[i, zero_indices[0]] = 1.0
-            else:
-                # Standard FCM membership calculation
-                for j in range(self.n_clusters):
-                    sum_term = 0.0
-                    for k in range(self.n_clusters):
-                        ratio = distances[j] / distances[k]
-                        sum_term += np.power(ratio, 2.0 / (self.m - 1.0))
-                    
-                    membership_matrix[i, j] = 1.0 / sum_term
+        # Vectorized implementation for better performance
+        # Calculate all distances at once (n_samples x n_clusters)
+        distances = np.zeros((n_samples, self.n_clusters))
+        for i in range(n_samples):
+            distances[i] = np.linalg.norm(X[i] - centers, axis=1)
+
+        # Handle points that coincide with centers
+        zero_distance_mask = (distances == 0)
+        if np.any(zero_distance_mask):
+            for i in range(n_samples):
+                if np.any(zero_distance_mask[i]):
+                    # Find the first center that coincides with this point
+                    zero_idx = np.where(zero_distance_mask[i])[0][0]
+                    membership_matrix[i, zero_idx] = 1.0
+                else:
+                    # Compute membership using vectorized operations
+                    power = 2.0 / (self.m - 1.0)
+                    dist_i = distances[i].reshape(-1, 1)  # Shape: (n_clusters, 1)
+                    dist_k = distances[i].reshape(1, -1)  # Shape: (1, n_clusters)
+
+                    # Calculate all ratios at once
+                    ratios = dist_i / dist_k  # Shape: (n_clusters, n_clusters)
+
+                    # Calculate sum terms for all clusters at once
+                    sum_terms = np.sum(np.power(ratios, power), axis=1)
+
+                    # Calculate memberships
+                    membership_matrix[i] = 1.0 / sum_terms
+        else:
+            # No zero distances - use fully vectorized approach
+            power = 2.0 / (self.m - 1.0)
+
+            for i in range(n_samples):
+                dist_i = distances[i].reshape(-1, 1)  # Shape: (n_clusters, 1)
+                dist_k = distances[i].reshape(1, -1)  # Shape: (1, n_clusters)
+
+                # Calculate all ratios at once
+                ratios = dist_i / dist_k  # Shape: (n_clusters, n_clusters)
+
+                # Calculate sum terms for all clusters at once
+                sum_terms = np.sum(np.power(ratios, power), axis=1)
+
+                # Calculate memberships
+                membership_matrix[i] = 1.0 / sum_terms
         
         return membership_matrix
     

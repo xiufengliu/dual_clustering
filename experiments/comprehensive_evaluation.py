@@ -12,6 +12,50 @@ from datetime import datetime
 import sys
 import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
+
+# Define standalone function for parallel processing
+def process_dataset(evaluation_instance, dataset):
+    """Process a single dataset for parallel execution.
+
+    Args:
+        evaluation_instance: ComprehensiveEvaluation instance
+        dataset: Dataset name
+
+    Returns:
+        Tuple of (dataset_name, results_dict)
+    """
+    try:
+        logger.info(f"Worker processing dataset: {dataset}")
+
+        # Prepare data
+        train_data, val_data, test_data = evaluation_instance.prepare_dataset(dataset)
+
+        # Run all models
+        model_results = {}
+
+        # Run baseline models
+        baseline_results = evaluation_instance.run_baseline_models(train_data, test_data, dataset)
+        model_results.update(baseline_results)
+
+        # Run proposed model
+        proposed_results = evaluation_instance.run_proposed_model(train_data, test_data, dataset)
+        model_results['NDC-RF'] = proposed_results
+
+        # Calculate statistical tests for this dataset
+        statistical_results = evaluation_instance.run_statistical_tests(model_results, dataset)
+
+        return dataset, {
+            'model_results': model_results,
+            'statistical_tests': statistical_results,
+            'data_info': {
+                'train_samples': len(train_data),
+                'val_samples': len(val_data),
+                'test_samples': len(test_data)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error processing dataset {dataset}: {e}")
+        return dataset, {'error': str(e), 'failed': True}
 import multiprocessing as mp
 
 # Add src to path
@@ -62,47 +106,70 @@ class ComprehensiveEvaluation:
         
     def run_main_experiments(self, datasets: List[str]) -> Dict[str, Any]:
         """Run main comparison experiments across all datasets.
-        
+
         Args:
             datasets: List of dataset names to evaluate
-            
+
         Returns:
             Dictionary with main experiment results
         """
         logger.info("Running main comparison experiments")
-        
+
         main_results = {}
-        
-        for dataset in datasets:
-            logger.info(f"Evaluating on {dataset} dataset")
-            
-            # Prepare data
-            train_data, val_data, test_data = self.prepare_dataset(dataset)
-            
-            # Run all models
-            model_results = {}
-            
-            # Run baseline models
-            baseline_results = self.run_baseline_models(train_data, test_data, dataset)
-            model_results.update(baseline_results)
-            
-            # Run proposed model
-            proposed_results = self.run_proposed_model(train_data, test_data, dataset)
-            model_results['NDC-RF'] = proposed_results
-            
-            # Calculate statistical tests for this dataset
-            statistical_results = self.run_statistical_tests(model_results, dataset)
-            
-            main_results[dataset] = {
-                'model_results': model_results,
-                'statistical_tests': statistical_results,
-                'data_info': {
-                    'train_samples': len(train_data),
-                    'val_samples': len(val_data),
-                    'test_samples': len(test_data)
+
+        # Check if parallel processing is enabled
+        use_parallel = self.config.get('use_parallel', True)
+        max_workers = self.config.get('max_workers', min(mp.cpu_count(), 4))
+
+        if use_parallel and len(datasets) > 1:
+            logger.info(f"Using parallel processing with {max_workers} workers for {len(datasets)} datasets")
+
+            # Process datasets in parallel using the standalone function
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                future_to_dataset = {executor.submit(process_dataset, self, dataset): dataset for dataset in datasets}
+
+                for future in as_completed(future_to_dataset):
+                    dataset = future_to_dataset[future]
+                    try:
+                        dataset_name, result = future.result()
+                        main_results[dataset_name] = result
+                        logger.info(f"Completed processing dataset: {dataset_name}")
+                    except Exception as e:
+                        logger.error(f"Exception processing dataset {dataset}: {e}")
+                        main_results[dataset] = {'error': str(e), 'failed': True}
+        else:
+            logger.info(f"Using sequential processing for {len(datasets)} datasets")
+            # Sequential processing
+            for dataset in datasets:
+                logger.info(f"Evaluating on {dataset} dataset")
+
+                # Prepare data
+                train_data, val_data, test_data = self.prepare_dataset(dataset)
+
+                # Run all models
+                model_results = {}
+
+                # Run baseline models
+                baseline_results = self.run_baseline_models(train_data, test_data, dataset)
+                model_results.update(baseline_results)
+
+                # Run proposed model
+                proposed_results = self.run_proposed_model(train_data, test_data, dataset)
+                model_results['NDC-RF'] = proposed_results
+
+                # Calculate statistical tests for this dataset
+                statistical_results = self.run_statistical_tests(model_results, dataset)
+
+                main_results[dataset] = {
+                    'model_results': model_results,
+                    'statistical_tests': statistical_results,
+                    'data_info': {
+                        'train_samples': len(train_data),
+                        'val_samples': len(val_data),
+                        'test_samples': len(test_data)
+                    }
                 }
-            }
-            
+
         return main_results
     
     def run_ablation_studies(self, dataset: str = "entso_e_solar") -> Dict[str, Any]:
@@ -492,6 +559,7 @@ class ComprehensiveEvaluation:
             'nrel_canada_wind': 'nrel_canada_wind.csv',
             'uk_sheffield_solar': 'uk_sheffield_solar.csv',
             'entso_e_load': 'entso_e_load_fixed.csv',
+            'entso_e_load_fixed': 'entso_e_load_fixed.csv',  # Handle both names
             'combined_solar_data': 'combined_solar_data.csv',
             'combined_wind_data': 'combined_wind_data.csv',
             'combined_load_data': 'combined_load_data.csv',
@@ -535,6 +603,13 @@ class ComprehensiveEvaluation:
         # Ensure energy_generation is numeric
         data['energy_generation'] = pd.to_numeric(data['energy_generation'], errors='coerce')
         data = data.dropna()
+
+        # Apply data size limit for faster testing if configured
+        max_samples = self.config.get('max_samples_per_dataset', None)
+        if max_samples and len(data) > max_samples:
+            logger.info(f"Limiting dataset {dataset_name} from {len(data)} to {max_samples} samples for faster testing")
+            # Take samples from the end to get more recent data
+            data = data.iloc[-max_samples:]
 
         # Split data
         train_split = self.config.get('train_split', 0.7)

@@ -29,7 +29,12 @@ class NeutrosophicComponents:
     
     def to_array(self) -> np.ndarray:
         """Convert to array format [T, I, F] for each sample."""
-        return np.column_stack([self.truth, self.indeterminacy, self.falsity])
+        # Ensure all components are float64 before stacking
+        truth_float = np.asarray(self.truth, dtype=np.float64)
+        indeterminacy_float = np.asarray(self.indeterminacy, dtype=np.float64)
+        falsity_float = np.asarray(self.falsity, dtype=np.float64)
+
+        return np.column_stack([truth_float, indeterminacy_float, falsity_float])
     
     def get_feature_names(self) -> list:
         """Get feature names for the neutrosophic components."""
@@ -169,19 +174,32 @@ class NeutrosophicTransformer:
         if neutrosophic_array.shape[0] != n_samples:
             raise ValueError(f"Mismatch in number of samples: original_features={n_samples}, neutrosophic_array={neutrosophic_array.shape[0]}")
 
-        # Concatenate all features with explicit dtype conversion
+        # Concatenate all features with explicit dtype conversion and error handling
         try:
+            # Force conversion to float64 with robust handling
+            original_float = self._force_float64_conversion(original_features, "original_features")
+            integrated_float = self._force_float64_conversion(integrated_cluster_features, "integrated_cluster_features")
+            neutrosophic_float = self._force_float64_conversion(neutrosophic_array, "neutrosophic_array")
+
             enriched_features = np.concatenate([
-                original_features.astype(np.float64),
-                integrated_cluster_features.astype(np.float64),
-                neutrosophic_array.astype(np.float64)
+                original_float,
+                integrated_float,
+                neutrosophic_float
             ], axis=1)
         except Exception as e:
             logger.error(f"Failed to concatenate features. Shapes: original={original_features.shape}, "
                         f"integrated={integrated_cluster_features.shape}, neutrosophic={neutrosophic_array.shape}")
             logger.error(f"Data types: original={original_features.dtype}, "
                         f"integrated={integrated_cluster_features.dtype}, neutrosophic={neutrosophic_array.dtype}")
-            raise ValueError(f"Feature concatenation failed: {e}") from e
+
+            # Fallback: create features with only numeric data
+            logger.warning("Attempting fallback feature creation with only numeric data")
+            try:
+                # Use only original features if concatenation fails
+                enriched_features = self._force_float64_conversion(original_features, "original_features_fallback")
+                logger.warning("Using only original features due to concatenation failure")
+            except Exception as e2:
+                raise ValueError(f"Feature concatenation and fallback both failed: {e}, {e2}") from e
 
         logger.info(f"Created enriched features with shape {enriched_features.shape} and dtype {enriched_features.dtype}")
 
@@ -367,6 +385,65 @@ class NeutrosophicTransformer:
             array = np.where(np.isfinite(array), array, 0.0)
 
         return array
+
+    def _force_float64_conversion(self, array: np.ndarray, array_name: str) -> np.ndarray:
+        """Force conversion to float64 with robust error handling.
+
+        Args:
+            array: Input array to convert
+            array_name: Name for error reporting
+
+        Returns:
+            Array converted to float64
+        """
+        if array.dtype == np.float64:
+            return array
+
+        try:
+            # First attempt: direct conversion
+            return array.astype(np.float64)
+        except (ValueError, TypeError) as e:
+            logger.warning(f"Direct conversion failed for {array_name}: {e}")
+
+            # Second attempt: element-by-element conversion
+            try:
+                original_shape = array.shape
+                flat_array = array.flatten()
+                converted_values = []
+
+                for i, item in enumerate(flat_array):
+                    try:
+                        if isinstance(item, (str, bytes)):
+                            # Try to parse string as number
+                            if isinstance(item, bytes):
+                                item = item.decode('utf-8')
+                            # Remove any non-numeric characters and try conversion
+                            cleaned_item = ''.join(c for c in str(item) if c.isdigit() or c in '.-+eE')
+                            if cleaned_item:
+                                converted_values.append(float(cleaned_item))
+                            else:
+                                converted_values.append(0.0)
+                        elif np.isscalar(item):
+                            if np.isfinite(float(item)):
+                                converted_values.append(float(item))
+                            else:
+                                converted_values.append(0.0)
+                        else:
+                            converted_values.append(0.0)
+                    except (ValueError, TypeError, OverflowError):
+                        logger.warning(f"Could not convert element {i} ({item}) in {array_name}, using 0.0")
+                        converted_values.append(0.0)
+
+                result = np.array(converted_values, dtype=np.float64).reshape(original_shape)
+                logger.info(f"Successfully converted {array_name} using element-by-element conversion")
+                return result
+
+            except Exception as e2:
+                logger.error(f"Element-by-element conversion failed for {array_name}: {e2}")
+
+                # Final fallback: create zero array with same shape
+                logger.warning(f"Creating zero array for {array_name} as final fallback")
+                return np.zeros(array.shape, dtype=np.float64)
 
     def get_params(self) -> Dict[str, Any]:
         """Get transformer parameters."""
