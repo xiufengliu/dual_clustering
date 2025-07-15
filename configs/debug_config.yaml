@@ -1,0 +1,79 @@
+# Debug configuration for rapid testing and bug fixing
+# Ultra-fast settings for development and debugging
+
+# Random seed for reproducibility
+random_state: 42
+
+# Data processing settings (minimal for speed)
+data:
+  train_split: 0.6
+  val_split: 0.2
+  test_split: 0.2
+  # Very small dataset size for debugging
+  max_samples_per_dataset: 500  # Extremely small for debugging
+  
+# Preprocessing configuration (minimal)
+preprocessing:
+  normalization_method: "minmax"
+  handle_missing: "drop"  # Fastest option
+  outlier_detection: false
+  feature_engineering: false
+
+# Clustering configuration (minimal for speed)
+clustering:
+  n_clusters: 3  # Minimal clusters
+  fcm_fuzziness: 2.0
+  max_iter: 20  # Very few iterations
+  tol: 0.1  # Very relaxed tolerance
+  
+# Neutrosophic transformation settings
+neutrosophic:
+  entropy_base: 2
+  entropy_epsilon: 1e-6  # Less precision for speed
+  
+# Random Forest configuration (minimal)
+random_forest:
+  n_estimators: 10  # Very few trees
+  max_depth: 5  # Shallow trees
+  min_samples_split: 10
+  min_samples_leaf: 5
+  max_features: "sqrt"
+  bootstrap: true
+  n_jobs: 1  # Single thread for debugging
+  
+# Forecasting parameters
+forecasting:
+  gamma: 1.96
+  beta: 1.0
+  confidence_level: 0.95
+  
+# Evaluation settings (minimal)
+evaluation:
+  metrics: ["rmse", "mae"]  # Only essential metrics
+  confidence_level: 0.95
+  
+# Performance optimization settings
+performance:
+  use_parallel: false  # Disable for debugging
+  max_workers: 1
+  batch_size: 10
+  enable_caching: false  # Disable for debugging
+  
+# Statistical testing (minimal)
+statistical_tests:
+  alpha: 0.05
+  tests: ["wilcoxon"]  # Only one test
+  
+# Experiment configuration
+experiment:
+  n_runs: 1
+  cross_validation: false
+  save_intermediate_results: true  # Enable for debugging
+  
+# Logging configuration (verbose for debugging)
+logging:
+  level: "DEBUG"
+  save_logs: true
+  log_performance_metrics: true
+  log_data_types: true
+  log_array_shapes: true

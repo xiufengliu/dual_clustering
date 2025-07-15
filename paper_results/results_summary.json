@@ -1,0 +1,123 @@
+{
+  "datasets": [
+    "kaggle_solar_plant"
+  ],
+  "models": [
+    "arima",
+    "sarima",
+    "svr",
+    "mlp",
+    "vanilla_rf",
+    "lightgbm",
+    "lstm",
+    "cnn_lstm",
+    "nbeats",
+    "NDC-RF"
+  ],
+  "performance": {
+    "kaggle_solar_plant": {
+      "arima": {
+        "rmse": 8478.609671911081,
+        "mae": 8478.60967176165,
+        "mape": Infinity,
+        "smape": 200.0,
+        "r2": 0.0,
+        "mbe": 8478.60967176165,
+        "nrmse": Infinity,
+        "cv_rmse": Infinity
+      },
+      "sarima": {
+        "rmse": 9542.414972348462,
+        "mae": 9424.081853530512,
+        "mape": Infinity,
+        "smape": 200.0,
+        "r2": 0.0,
+        "mbe": 9424.081853530512,
+        "nrmse": Infinity,
+        "cv_rmse": Infinity
+      },
+      "svr": {
+        "rmse": 269.19382100279824,
+        "mae": 269.1664814978328,
+        "mape": Infinity,
+        "smape": 200.0,
+        "r2": 0.0,
+        "mbe": 269.1664814978328,
+        "nrmse": Infinity,
+        "cv_rmse": Infinity
+      },
+      "mlp": {
+        "rmse": 913.7278896184645,
+        "mae": 532.9294027233227,
+        "mape": Infinity,
+        "smape": 200.0,
+        "r2": 0.0,
+        "mbe": -411.30027108021466,
+        "nrmse": Infinity,
+        "cv_rmse": Infinity
+      },
+      "vanilla_rf": {
+        "rmse": 0.00041654265874999997,
+        "mae": 0.00010413566468749999,
+        "mape": Infinity,
+        "smape": 200.0,
+        "r2": 0.0,
+        "mbe": 0.00010413566468749999,
+        "nrmse": Infinity,
+        "cv_rmse": Infinity
+      },
+      "lightgbm": {
+        "rmse": 198.22988523186615,
+        "mae": 147.25876277818298,
+        "mape": Infinity,
+        "smape": 200.0,
+        "r2": 0.0,
+        "mbe": 46.024469469724465,
+        "nrmse": Infinity,
+        "cv_rmse": Infinity
+      },
+      "lstm": {
+        "rmse": 24.418221021178287,
+        "mae": 24.325450658798218,
+        "mape": Infinity,
+        "smape": 200.0,
+        "r2": 0.0,
+        "mbe": 24.325450658798218,
+        "nrmse": Infinity,
+        "cv_rmse": Infinity
+      },
+      "cnn_lstm": {
+        "rmse": 1.055902847873997,
+        "mae": 1.0536672845482826,
+        "mape": Infinity,
+        "smape": 200.0,
+        "r2": 0.0,
+        "mbe": 1.0536672845482826,
+        "nrmse": Infinity,
+        "cv_rmse": Infinity
+      },
+      "nbeats": {
+        "rmse": 29.67908315582489,
+        "mae": 22.931467592716217,
+        "mape": Infinity,
+        "smape": 200.0,
+        "r2": 0.0,
+        "mbe": 22.931467592716217,
+        "nrmse": Infinity,
+        "cv_rmse": Infinity
+      }
+    }
+  },
+  "statistical_tests": {
+    "kaggle_solar_plant": {}
+  },
+  "experiment_info": {},
+  "performance_metrics": {
+    "total_execution_time": 9.218055248260498,
+    "stage_times": {
+      "main_experiments": 9.21576476097107
+    },
+    "datasets_processed": 1,
+    "average_time_per_dataset": 9.218055248260498
+  }
+}

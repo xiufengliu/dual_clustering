@@ -1,0 +1,19 @@
+\begin{table}
+\caption{Performance comparison for Kaggle Solar Plant dataset}
+\label{tab:kaggle_solar_plant_results}
+\begin{tabular}{lrrrrrrrr}
+\toprule
+Model & rmse & mae & mape & smape & r2 & mbe & nrmse & cv_rmse \\
+\midrule
+vanilla_rf & 0.0004 & 0.0001 & inf & 200.0000 & 0.0000 & 0.0001 & inf & inf \\
+cnn_lstm & 1.0559 & 1.0537 & inf & 200.0000 & 0.0000 & 1.0537 & inf & inf \\
+lstm & 24.4182 & 24.3255 & inf & 200.0000 & 0.0000 & 24.3255 & inf & inf \\
+nbeats & 29.6791 & 22.9315 & inf & 200.0000 & 0.0000 & 22.9315 & inf & inf \\
+lightgbm & 198.2299 & 147.2588 & inf & 200.0000 & 0.0000 & 46.0245 & inf & inf \\
+svr & 269.1938 & 269.1665 & inf & 200.0000 & 0.0000 & 269.1665 & inf & inf \\
+mlp & 913.7279 & 532.9294 & inf & 200.0000 & 0.0000 & -411.3003 & inf & inf \\
+arima & 8478.6097 & 8478.6097 & inf & 200.0000 & 0.0000 & 8478.6097 & inf & inf \\
+sarima & 9542.4150 & 9424.0819 & inf & 200.0000 & 0.0000 & 9424.0819 & inf & inf \\
+\bottomrule
+\end{tabular}
+\end{table}

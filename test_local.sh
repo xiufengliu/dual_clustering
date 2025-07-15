@@ -1,32 +1,52 @@
 #!/bin/bash
-# Simple local test script using local Python
 
-# Source bashrc to set up local Python environment
-source ~/.bashrc
+# Local testing script for the optimized experiments
+# This script runs a minimal test to validate the fixes work in the full pipeline
 
-echo "=== Testing local setup ==="
-echo "Python version:"
-python --version
-echo "Python path:"
-which python
+echo "=========================================="
+echo "LOCAL TESTING OF OPTIMIZED EXPERIMENTS"
+echo "=========================================="
 
-echo "=== Installing dependencies ==="
-pip install --user -r requirements.txt
+# Step 1: Test the fixes
+echo "Step 1: Testing bug fixes..."
+python test_fixes.py
+if [ $? -ne 0 ]; then
+    echo "❌ Bug fix tests failed!"
+    exit 1
+fi
 
-echo "=== Testing imports ==="
-python -c "
-import sys
-sys.path.append('.')
-try:
-    from src.framework.forecasting_framework import NeutrosophicForecastingFramework
-    from src.models.baseline_models import BaselineForecasters
-    from src.evaluation.metrics import ForecastingMetrics
-    print('✓ All imports successful')
-except ImportError as e:
-    print(f'✗ Import error: {e}')
-    sys.exit(1)
-"
+echo "✅ Bug fix tests passed!"
+echo ""
 
-echo "=== Local test completed ==="
-echo "If successful, you can submit to the cluster with:"
-echo "bsub < submit_comprehensive_eval.sh"
+# Step 2: Run minimal optimized experiment
+echo "Step 2: Running minimal optimized experiment..."
+echo "Using debug configuration with very small dataset..."
+
+python run_optimized_experiments.py \
+    --config debug_config \
+    --datasets kaggle_solar_plant \
+    --max-samples 200 \
+    --skip-ablation \
+    --skip-sensitivity \
+    --skip-computational \
+    --skip-cross-dataset \
+    --skip-robustness
+
+if [ $? -eq 0 ]; then
+    echo "✅ Minimal experiment completed successfully!"
+    echo ""
+    echo "Results should be available in: results/optimized/"
+    echo ""
+    echo "Next steps:"
+    echo "1. Check results in results/optimized/"
+    echo "2. Run with larger datasets if needed"
+    echo "3. Submit optimized job to cluster"
+else
+    echo "❌ Minimal experiment failed!"
+    echo "Check the logs for detailed error information"
+    exit 1
+fi
+
+echo "=========================================="
+echo "LOCAL TESTING COMPLETED SUCCESSFULLY!"
+echo "=========================================="
