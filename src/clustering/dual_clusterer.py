@@ -243,6 +243,16 @@ class DualClusterer:
         # Concatenate one-hot K-Means with FCM memberships
         integrated_features = np.concatenate([one_hot_kmeans, fcm_memberships], axis=1)
 
+        # Ensure final result is float64 and contains no string data
+        if integrated_features.dtype != np.float64:
+            logger.warning(f"Integrated features dtype is {integrated_features.dtype}, converting to float64")
+            integrated_features = integrated_features.astype(np.float64)
+
+        # Check for any non-finite values
+        if not np.all(np.isfinite(integrated_features)):
+            logger.warning("Integrated features contain non-finite values, replacing with 0.0")
+            integrated_features = np.where(np.isfinite(integrated_features), integrated_features, 0.0)
+
         logger.info(f"Created integrated features with shape {integrated_features.shape} and dtype {integrated_features.dtype}")
 
         return integrated_features

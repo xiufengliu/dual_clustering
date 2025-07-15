@@ -18,10 +18,15 @@ class NeutrosophicComponents:
     falsity: np.ndarray
     
     def __post_init__(self):
-        """Validate neutrosophic components after initialization."""
+        """Validate neutrosophic components after initialization and ensure float64 dtype."""
+        # Convert all components to float64
+        self.truth = np.asarray(self.truth, dtype=np.float64)
+        self.indeterminacy = np.asarray(self.indeterminacy, dtype=np.float64)
+        self.falsity = np.asarray(self.falsity, dtype=np.float64)
+
         if not (self.truth.shape == self.indeterminacy.shape == self.falsity.shape):
             raise ValueError("All neutrosophic components must have the same shape")
-        
+
         # Check value ranges
         for component, name in [(self.truth, "Truth"), (self.indeterminacy, "Indeterminacy"), (self.falsity, "Falsity")]:
             if np.any(component < 0) or np.any(component > 1):
@@ -127,6 +132,11 @@ class NeutrosophicTransformer:
             entropy = compute_shannon_entropy(membership_vector, base=self.entropy_base, epsilon=self.entropy_epsilon)
             indeterminacy[i] = normalize_entropy(entropy, n_clusters, base=self.entropy_base)
         
+        # Ensure all components are float64 before creating NeutrosophicComponents
+        truth = np.asarray(truth, dtype=np.float64)
+        indeterminacy = np.asarray(indeterminacy, dtype=np.float64)
+        falsity = np.asarray(falsity, dtype=np.float64)
+
         # Create neutrosophic components
         components = NeutrosophicComponents(
             truth=truth,
@@ -174,6 +184,11 @@ class NeutrosophicTransformer:
         if neutrosophic_array.shape[0] != n_samples:
             raise ValueError(f"Mismatch in number of samples: original_features={n_samples}, neutrosophic_array={neutrosophic_array.shape[0]}")
 
+        # Debug logging before concatenation
+        logger.debug(f"Before concatenation - Original: shape={original_features.shape}, dtype={original_features.dtype}")
+        logger.debug(f"Before concatenation - Integrated: shape={integrated_cluster_features.shape}, dtype={integrated_cluster_features.dtype}")
+        logger.debug(f"Before concatenation - Neutrosophic: shape={neutrosophic_array.shape}, dtype={neutrosophic_array.dtype}")
+
         # Concatenate all features with explicit dtype conversion and error handling
         try:
             # Force conversion to float64 with robust handling
@@ -181,16 +196,38 @@ class NeutrosophicTransformer:
             integrated_float = self._force_float64_conversion(integrated_cluster_features, "integrated_cluster_features")
             neutrosophic_float = self._force_float64_conversion(neutrosophic_array, "neutrosophic_array")
 
+            # Additional validation before concatenation
+            if original_float.dtype != np.float64:
+                logger.error(f"Original features still not float64: {original_float.dtype}")
+                original_float = np.asarray(original_float, dtype=np.float64)
+
+            if integrated_float.dtype != np.float64:
+                logger.error(f"Integrated features still not float64: {integrated_float.dtype}")
+                integrated_float = np.asarray(integrated_float, dtype=np.float64)
+
+            if neutrosophic_float.dtype != np.float64:
+                logger.error(f"Neutrosophic features still not float64: {neutrosophic_float.dtype}")
+                neutrosophic_float = np.asarray(neutrosophic_float, dtype=np.float64)
+
+            # Final concatenation with explicit dtype specification
             enriched_features = np.concatenate([
                 original_float,
                 integrated_float,
                 neutrosophic_float
-            ], axis=1)
+            ], axis=1).astype(np.float64)
+
+            logger.debug(f"Concatenation successful - Result: shape={enriched_features.shape}, dtype={enriched_features.dtype}")
+
         except Exception as e:
             logger.error(f"Failed to concatenate features. Shapes: original={original_features.shape}, "
                         f"integrated={integrated_cluster_features.shape}, neutrosophic={neutrosophic_array.shape}")
             logger.error(f"Data types: original={original_features.dtype}, "
                         f"integrated={integrated_cluster_features.dtype}, neutrosophic={neutrosophic_array.dtype}")
+
+            # More detailed error logging
+            logger.error(f"Original features sample: {original_features.flat[:5] if original_features.size > 0 else 'empty'}")
+            logger.error(f"Integrated features sample: {integrated_cluster_features.flat[:5] if integrated_cluster_features.size > 0 else 'empty'}")
+            logger.error(f"Neutrosophic features sample: {neutrosophic_array.flat[:5] if neutrosophic_array.size > 0 else 'empty'}")
 
             # Fallback: create features with only numeric data
             logger.warning("Attempting fallback feature creation with only numeric data")
