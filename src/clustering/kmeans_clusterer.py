@@ -63,11 +63,12 @@ class KMeansClusterer(BaseClusterer):
             X = X.reshape(-1, 1)
         
         # Fit the model
+        logger.debug(f"X dtype before KMeans fit: {X.dtype}, shape: {X.shape}, sample: {X[:5]}")
         self.kmeans.fit(X)
         
         # Store results
         self.cluster_centers_ = self.kmeans.cluster_centers_
-        self.labels_ = self.kmeans.labels_
+        self.labels_ = self.kmeans.labels_.astype(int) # Ensure labels are integers
         self.inertia_ = self.kmeans.inertia_
         self.is_fitted = True
         

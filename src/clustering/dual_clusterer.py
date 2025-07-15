@@ -166,6 +166,9 @@ class DualClusterer:
             kmeans_labels = self.kmeans_clusterer.labels_
             fcm_memberships = self.fcm_clusterer.get_membership_matrix()
 
+            logger.debug(f"kmeans_labels dtype in DualClusterer: {kmeans_labels.dtype}, sample: {kmeans_labels[:5]}")
+            logger.debug(f"fcm_memberships dtype in DualClusterer: {fcm_memberships.dtype}, sample: {fcm_memberships[:5, :5]}")
+
             # Ensure proper data types
             if kmeans_labels.dtype.kind not in ['i', 'u']:
                 logger.warning(f"K-means labels have non-integer dtype: {kmeans_labels.dtype}. Converting to int.")
@@ -200,17 +203,29 @@ class DualClusterer:
         
         return self.integrated_features_
     
-    def _create_integrated_features(self) -> np.ndarray:
+    def _create_integrated_features(self, X: Optional[np.ndarray] = None) -> np.ndarray:
         """Create integrated cluster features as described in the paper.
 
         Implementation of Proposition 2: f_i^cluster = [one_hot(k_i), u_i]
 
+        Args:
+            X: Optional input data for prediction. If None, uses fitted labels.
+
         Returns:
             Integrated feature matrix
         """
-        # Get cluster assignments directly from clusterers (avoid circular dependency)
-        kmeans_labels = self.kmeans_clusterer.labels_
-        fcm_memberships = self.fcm_clusterer.get_membership_matrix()
+        logger.debug(f"_create_integrated_features - X is None: {X is None}")
+        if X is None:
+            # Use fitted labels and memberships
+            kmeans_labels = self.kmeans_clusterer.labels_
+            fcm_memberships = self.fcm_clusterer.get_membership_matrix()
+            logger.debug(f"_create_integrated_features (fitted) - kmeans_labels dtype: {kmeans_labels.dtype}, fcm_memberships dtype: {fcm_memberships.dtype}")
+        else:
+            # Predict for new data
+            logger.debug(f"_create_integrated_features (predicting) - X shape: {X.shape}, X dtype: {X.dtype}")
+            kmeans_labels, fcm_memberships = self.predict(X)
+            logger.debug(f"_create_integrated_features (predicted) - kmeans_labels dtype: {kmeans_labels.dtype}, fcm_memberships dtype: {fcm_memberships.dtype}")
+
         n_samples = len(kmeans_labels)
 
         # Ensure kmeans_labels are integers

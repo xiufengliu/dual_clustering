@@ -128,7 +128,7 @@ class NeutrosophicForecastingFramework:
         
         # For this implementation, we use the normalized time series as features
         # In practice, you might want to create lag features, time features, etc.
-        X = normalized_data.reshape(-1, 1)  # Single feature: normalized energy generation
+        X = normalized_data.reshape(-1, 1).astype(np.float64)  # Ensure X is float64
         y = normalized_data  # Target is the same (for autoregressive forecasting)
         
         # Stage 2: Dual Clustering
@@ -142,18 +142,21 @@ class NeutrosophicForecastingFramework:
         self.logger.info("Stage 3: Neutrosophic transformation")
         try:
             kmeans_labels, fcm_memberships = self.dual_clusterer.get_cluster_assignments()
+            kmeans_labels = kmeans_labels.astype(int) # Ensure integer type before passing to transformer
 
             # Log data types for debugging
             self.logger.debug(f"K-means labels dtype: {kmeans_labels.dtype}, shape: {kmeans_labels.shape}")
             self.logger.debug(f"FCM memberships dtype: {fcm_memberships.dtype}, shape: {fcm_memberships.shape}")
 
+            self.logger.debug(f"K-means labels dtype before transform: {kmeans_labels.dtype}, shape: {kmeans_labels.shape}, sample: {kmeans_labels[:5]}")
+            self.logger.debug(f"FCM memberships dtype before transform: {fcm_memberships.dtype}, shape: {fcm_memberships.shape}, sample: {fcm_memberships[:5, :5]}")
             self.neutrosophic_components = self.neutrosophic_transformer.transform(
                 kmeans_labels, fcm_memberships
             )
 
             # Create enriched feature set
             enriched_features = self.neutrosophic_transformer.create_enriched_features(
-                X, integrated_features, self.neutrosophic_components
+                X, self.dual_clusterer.get_integrated_features(), self.neutrosophic_components
             )
 
         except Exception as e:
@@ -238,7 +241,7 @@ class NeutrosophicForecastingFramework:
             )
             
             # Get integrated features
-            integrated_features = self.dual_clusterer.get_integrated_features()
+            integrated_features = self.dual_clusterer._create_integrated_features(current_input)
             
             # Create enriched features
             enriched_features = self.neutrosophic_transformer.create_enriched_features(
@@ -364,7 +367,7 @@ class NeutrosophicForecastingFramework:
                 )
 
                 # Get integrated features (cached from training)
-                integrated_features = self.dual_clusterer.get_integrated_features()
+                integrated_features = self.dual_clusterer._create_integrated_features(current_input)
 
                 # Create enriched features
                 enriched_features = self.neutrosophic_transformer.create_enriched_features(

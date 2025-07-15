@@ -14,7 +14,10 @@ import warnings
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # Define standalone function for parallel processing
-def process_dataset(evaluation_instance, dataset):
+def process_dataset(evaluation_instance, dataset, log_file):
+    # Setup logging for the new process
+    setup_logger("worker_logger", log_file=log_file)
+    logger = logging.getLogger("worker_logger")
     """Process a single dataset for parallel execution.
 
     Args:
@@ -76,7 +79,7 @@ logger = logging.getLogger(__name__)
 class ComprehensiveEvaluation:
     """Comprehensive evaluation implementing all experimental scenarios from the TNNLS paper."""
     
-    def __init__(self, config: Dict[str, Any], output_dir: str = "results/comprehensive"):
+    def __init__(self, config: Dict[str, Any], output_dir: str = "results/comprehensive", log_file: Optional[Path] = None):
         """Initialize comprehensive evaluation.
         
         Args:
@@ -118,7 +121,7 @@ class ComprehensiveEvaluation:
         main_results = {}
 
         # Check if parallel processing is enabled
-        use_parallel = self.config.get('use_parallel', True)
+        use_parallel = False # Temporarily disable parallel processing for debugging
         max_workers = self.config.get('max_workers', min(mp.cpu_count(), 4))
 
         if use_parallel and len(datasets) > 1:
@@ -126,7 +129,7 @@ class ComprehensiveEvaluation:
 
             # Process datasets in parallel using the standalone function
             with ProcessPoolExecutor(max_workers=max_workers) as executor:
-                future_to_dataset = {executor.submit(process_dataset, self, dataset): dataset for dataset in datasets}
+                future_to_dataset = {executor.submit(process_dataset, self, dataset, self.log_file): dataset for dataset in datasets}
 
                 for future in as_completed(future_to_dataset):
                     dataset = future_to_dataset[future]
@@ -584,25 +587,22 @@ class ComprehensiveEvaluation:
 
         data = pd.read_csv(data_file)
 
+        # Ensure energy_generation is numeric and handle potential errors immediately after loading
+        data['energy_generation'] = pd.to_numeric(data['energy_generation'], errors='coerce').astype(np.float64)
+        data = data.dropna(subset=['energy_generation'])
+
         # Validate data structure
         if 'timestamp' not in data.columns:
             raise ValueError(f"Dataset {dataset_name} missing 'timestamp' column")
         if 'energy_generation' not in data.columns:
             raise ValueError(f"Dataset {dataset_name} missing 'energy_generation' column")
 
-        # Check for sufficient data
+        # Check for sufficient data after dropping NaNs
         if len(data) < 100:
-            raise ValueError(f"Dataset {dataset_name} has insufficient data: {len(data)} rows")
+            raise ValueError(f"Dataset {dataset_name} has insufficient data after numeric conversion: {len(data)} rows")
 
         data['timestamp'] = pd.to_datetime(data['timestamp'])
         data = data.set_index('timestamp')
-
-        # Remove any NaN values
-        data = data.dropna()
-
-        # Ensure energy_generation is numeric
-        data['energy_generation'] = pd.to_numeric(data['energy_generation'], errors='coerce')
-        data = data.dropna()
 
         # Apply data size limit for faster testing if configured
         max_samples = self.config.get('max_samples_per_dataset', None)

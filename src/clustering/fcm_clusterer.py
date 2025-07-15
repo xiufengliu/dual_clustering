@@ -51,9 +51,13 @@ class FCMClusterer(BaseClusterer):
         
         logger.info(f"Fitting FCM with {self.n_clusters} clusters, m={self.m} on data shape {X.shape}")
         
-        # Reshape if 1D
+        # Reshape if 1D and ensure it's (n_samples, 1)
         if X.ndim == 1:
             X = X.reshape(-1, 1)
+        elif X.ndim > 2 or X.shape[1] != 1:
+            logger.error(f"FCM fit received X with shape {X.shape}. Expected (n_samples,) or (n_samples, 1).")
+            raise ValueError("FCMClusterer expects single-feature input (n_samples,) or (n_samples, 1).")
+        logger.debug(f"FCM fit - X shape after reshape: {X.shape}, dtype: {X.dtype}")
         
         n_samples, n_features = X.shape
         
@@ -124,9 +128,13 @@ class FCMClusterer(BaseClusterer):
         
         self.validate_input(X)
         
-        # Reshape if 1D
+        # Reshape if 1D and ensure it's (n_samples, 1)
         if X.ndim == 1:
             X = X.reshape(-1, 1)
+        elif X.ndim > 2 or X.shape[1] != 1:
+            logger.error(f"FCM predict_proba received X with shape {X.shape}. Expected (n_samples,) or (n_samples, 1).")
+            raise ValueError("FCMClusterer expects single-feature input (n_samples,) or (n_samples, 1).")
+        logger.debug(f"FCM predict_proba - X shape after reshape: {X.shape}, dtype: {X.dtype}")
         
         return self._update_membership_matrix(X, self.cluster_centers_)
     
@@ -189,11 +197,40 @@ class FCMClusterer(BaseClusterer):
         denominator = np.sum(membership_powered, axis=0, keepdims=True).T
 
         # Debug information
-        logger.debug(f"FCM center update - numerator shape: {numerator.shape}")
+        logger.debug(f"FCM center update - numerator shape: {numerator.shape}, dtype: {numerator.dtype}")
+        logger.debug(f"FCM center update - centers shape (before return): {centers.shape}, dtype: {centers.dtype}")
         logger.debug(f"FCM center update - denominator shape: {denominator.shape}")
 
         # Compute centers with safe division
-        centers = safe_divide(numerator, denominator, default_value=0.0)
+        centers = None # Initialize centers to None
+        try:
+            # Validate inputs before division
+            if not np.all(np.isfinite(numerator)):
+                logger.error(f"FCM _update_cluster_centers - Non-finite values in numerator. Numerator sample: {numerator.flatten()[:5]}")
+                raise ValueError("Numerator contains non-finite values.")
+            if not np.all(np.isfinite(denominator)):
+                logger.error(f"FCM _update_cluster_centers - Non-finite values in denominator. Denominator sample: {denominator.flatten()[:5]}")
+                raise ValueError("Denominator contains non-finite values.")
+
+            centers = safe_divide(numerator, denominator, default_value=0.0)
+            logger.debug(f"FCM center update - centers shape (after safe_divide): {centers.shape}, dtype: {centers.dtype}")
+
+            # Ensure centers have the correct number of features
+            if centers.shape[1] != X.shape[1]:
+                logger.error(f"FCM _update_cluster_centers - centers shape mismatch. Expected {X.shape[1]} features, got {centers.shape[1]}.")
+                # Attempt to reshape if possible, or raise error
+                try:
+                    centers = centers.reshape(self.n_clusters, X.shape[1])
+                    logger.warning(f"FCM _update_cluster_centers - Reshaped centers to {centers.shape}.")
+                except ValueError:
+                    raise ValueError("FCM _update_cluster_centers resulted in centers with incorrect feature dimension and could not be reshaped.")
+        except Exception as e:
+            logger.error(f"Error during center update in FCM: {e}")
+            logger.error(f"Numerator shape: {numerator.shape}, dtype: {numerator.dtype}, sample: {numerator.flatten()[:5]}")
+            logger.error(f"Denominator shape: {denominator.shape}, dtype: {denominator.dtype}, sample: {denominator.flatten()[:5]}")
+            raise
+
+        return centers
         
         return centers
     
@@ -208,52 +245,83 @@ class FCMClusterer(BaseClusterer):
             Updated membership matrix of shape (n_samples, n_clusters)
         """
         n_samples = X.shape[0]
-        membership_matrix = np.zeros((n_samples, self.n_clusters))
-        
-        # Vectorized implementation for better performance
+        membership_matrix = np.zeros((n_samples, self.n_clusters), dtype=np.float64)
+
+        # Ensure X and centers are float64 for distance calculation
+        X = X.astype(np.float64)
+        centers = centers.astype(np.float64)
+
         # Calculate all distances at once (n_samples x n_clusters)
-        distances = np.zeros((n_samples, self.n_clusters))
-        for i in range(n_samples):
-            distances[i] = np.linalg.norm(X[i] - centers, axis=1)
+        # Reshape centers to (1, n_clusters, n_features) and X to (n_samples, 1, n_features)
+        # to enable broadcasting for element-wise subtraction
+        distances = None # Initialize distances to None
+        try:
+            distances = np.linalg.norm(X[:, np.newaxis, :] - centers[np.newaxis, :, :], axis=2)
+            logger.debug(f"FCM membership update - X shape: {X.shape}, X dtype: {X.dtype}")
+            logger.debug(f"FCM membership update - centers shape: {centers.shape}, centers dtype: {centers.dtype}")
+            logger.debug(f"FCM membership update - distances shape: {distances.shape}, dtype: {distances.dtype}")
+        except Exception as e:
+            logger.error(f"Error calculating distances in FCM: {e}")
+            logger.error(f"X shape: {X.shape}, dtype: {X.dtype}, sample: {X.flatten()[:5]}")
+            logger.error(f"Centers shape: {centers.shape}, dtype: {centers.dtype}, sample: {centers.flatten()[:5]}")
+            raise
 
-        # Handle points that coincide with centers
-        zero_distance_mask = (distances == 0)
+        # Add a small epsilon to distances to prevent division by zero or log(0)
+        distances = distances + np.finfo(float).eps
+
+        # Handle points that coincide with centers (distance is effectively zero)
+        # Use tolerance for "zero" distance
+        zero_distance_mask = (distances < self.tol)
+        
+        # If any point is exactly at a center, its membership to that cluster is 1, and 0 to others
+        # This part needs to be handled carefully to avoid loops if possible, or minimize their impact
         if np.any(zero_distance_mask):
-            for i in range(n_samples):
-                if np.any(zero_distance_mask[i]):
-                    # Find the first center that coincides with this point
-                    zero_idx = np.where(zero_distance_mask[i])[0][0]
-                    membership_matrix[i, zero_idx] = 1.0
-                else:
-                    # Compute membership using vectorized operations
-                    power = 2.0 / (self.m - 1.0)
-                    dist_i = distances[i].reshape(-1, 1)  # Shape: (n_clusters, 1)
-                    dist_k = distances[i].reshape(1, -1)  # Shape: (1, n_clusters)
+            # For points that coincide with a center, set membership to 1 for that center and 0 for others
+            # This is a more robust way to handle it without explicit loops for each sample
+            # Create a temporary membership matrix for zero-distance points
+            temp_membership = np.zeros_like(membership_matrix, dtype=np.float64)
+            
+            # For each row (sample) where there's a zero distance
+            rows_with_zero_dist = np.where(np.any(zero_distance_mask, axis=1))[0]
+            for r in rows_with_zero_dist:
+                # Get indices of centers that are "zero distance" away
+                coinciding_centers_indices = np.where(zero_distance_mask[r])[0]
+                # Distribute membership equally among coinciding centers
+                temp_membership[r, coinciding_centers_indices] = 1.0 / len(coinciding_centers_indices)
+            
+            # For points that do not coincide with any center, calculate memberships normally
+            non_coinciding_rows = np.where(~np.any(zero_distance_mask, axis=1))[0]
+            if len(non_coinciding_rows) > 0:
+                power = 2.0 / (self.m - 1.0)
+                # Calculate ratios for non-coinciding points
+                ratios = safe_divide(distances[non_coinciding_rows, :, np.newaxis], distances[non_coinciding_rows, np.newaxis, :], default_value=0.0).astype(np.float64)
+                sum_terms = np.sum(np.power(ratios, power), axis=2).astype(np.float64)
+                temp_membership[non_coinciding_rows, :] = safe_divide(1.0, sum_terms, default_value=0.0).astype(np.float64)
+            
+            membership_matrix = temp_membership
 
-                    # Calculate all ratios at once
-                    ratios = dist_i / dist_k  # Shape: (n_clusters, n_clusters)
-
-                    # Calculate sum terms for all clusters at once
-                    sum_terms = np.sum(np.power(ratios, power), axis=1)
-
-                    # Calculate memberships
-                    membership_matrix[i] = 1.0 / sum_terms
         else:
             # No zero distances - use fully vectorized approach
             power = 2.0 / (self.m - 1.0)
-
-            for i in range(n_samples):
-                dist_i = distances[i].reshape(-1, 1)  # Shape: (n_clusters, 1)
-                dist_k = distances[i].reshape(1, -1)  # Shape: (1, n_clusters)
-
-                # Calculate all ratios at once
-                ratios = dist_i / dist_k  # Shape: (n_clusters, n_clusters)
-
-                # Calculate sum terms for all clusters at once
-                sum_terms = np.sum(np.power(ratios, power), axis=1)
-
-                # Calculate memberships
-                membership_matrix[i] = 1.0 / sum_terms
+            # Calculate ratios: (n_samples, n_clusters, 1) / (n_samples, 1, n_clusters)
+            # This results in (n_samples, n_clusters, n_clusters)
+            ratios = safe_divide(distances[:, :, np.newaxis], distances[:, np.newaxis, :], default_value=0.0).astype(np.float64)
+            
+            # Calculate sum terms: sum over the last axis (n_samples, n_clusters)
+            sum_terms = np.sum(np.power(ratios, power), axis=2).astype(np.float64)
+            
+            # Calculate memberships: 1.0 / (n_samples, n_clusters)
+            membership_matrix = safe_divide(1.0, sum_terms, default_value=0.0).astype(np.float64)
+        
+        # Final check to ensure rows sum to 1 (due to potential floating point inaccuracies)
+        row_sums = np.sum(membership_matrix, axis=1)
+        if not np.allclose(row_sums, 1.0, atol=1e-6):
+            logger.warning("Membership matrix rows do not sum to 1.0 after update. Re-normalizing.")
+            membership_matrix = safe_divide(membership_matrix, row_sums[:, np.newaxis], default_value=1.0/self.n_clusters).astype(np.float64)
+            
+        logger.debug(f"FCM membership update - new_membership_matrix shape: {membership_matrix.shape}, dtype: {membership_matrix.dtype}")
+        
+        logger.debug(f"FCM membership update - new_membership_matrix shape: {membership_matrix.shape}, dtype: {membership_matrix.dtype}")
         
         return membership_matrix
     

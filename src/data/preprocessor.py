@@ -48,8 +48,8 @@ class DataPreprocessor:
         # Step 2: Handle outliers
         processed_data = self._handle_outliers(processed_data, fit=fit)
         
-        # Step 3: Extract time series values
-        values = processed_data['energy_generation'].values
+        # Step 3: Extract time series values and ensure numeric type
+        values = processed_data['energy_generation'].values.astype(np.float64)
         
         # Step 4: Normalize data
         if fit:
@@ -59,7 +59,7 @@ class DataPreprocessor:
         else:
             if self.normalization_params is None:
                 raise ValueError("Normalization parameters not fitted. Call preprocess with fit=True first.")
-            normalized_values = denormalize_data(values, self.normalization_params)
+            normalized_values = denormalize_data(normalized_values, self.normalization_params)
         
         # Prepare preprocessing parameters
         preprocessing_params = {

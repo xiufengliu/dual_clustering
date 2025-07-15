@@ -72,7 +72,7 @@ def main():
         logger.info(f"Overriding max samples per dataset to {args.max_samples}")
 
     # Initialize evaluation
-    evaluation = ComprehensiveEvaluation(config, args.output_dir)
+    evaluation = ComprehensiveEvaluation(config, args.output_dir, log_file=log_file)
 
     # Performance tracking
     start_time = time.time()

@@ -40,7 +40,7 @@ python run_optimized_experiments.py \
     --skip-computational \
     --skip-cross-dataset \
     --skip-robustness \
-    --output-dir results/optimized
+    --output-dir results/optimized > experiment_results.log 2>&1
 
 echo "=== Experiment completed ==="
 echo "Results saved to: results/optimized/"

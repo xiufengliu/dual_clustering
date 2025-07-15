@@ -162,17 +162,18 @@ class ENTSOEDataLoader(BaseDataLoader):
             seasonal_pattern = 0.5 + 0.5 * np.sin((days - 80) * 2 * np.pi / 365)
             
             # Base generation with noise
-            base_generation = 100 * daily_pattern * seasonal_pattern
-            noise = np.random.normal(0, 10, n_points)
-            generation = np.maximum(0, base_generation + noise)
+            base_generation = (100 * daily_pattern * seasonal_pattern).astype(np.float64)
+            noise = np.random.normal(0, 10, n_points).astype(np.float64)
+            generation = np.maximum(0, base_generation + noise).astype(np.float64)
+            logger.debug(f"Synthetic solar generation dtype: {generation.dtype}, sample: {generation[:5]}")
             
         elif energy_type in ["wind_onshore", "wind_offshore"]:
             # Wind pattern: more variable, less predictable
             # Use AR(1) process with seasonal component
             base_level = 80 if energy_type == "wind_offshore" else 60
             
-            generation = np.zeros(n_points)
-            generation[0] = base_level
+            generation = np.zeros(n_points, dtype=np.float64)
+            generation[0] = float(base_level)
             
             for i in range(1, n_points):
                 # AR(1) component
@@ -185,11 +186,12 @@ class ENTSOEDataLoader(BaseDataLoader):
                 # Random shock
                 shock = np.random.normal(0, 15)
                 
-                generation[i] = max(0, 0.3 * base_level + 0.7 * ar_component + seasonal + shock)
+                generation[i] = float(max(0, 0.3 * base_level + 0.7 * ar_component + seasonal + shock))
+            logger.debug(f"Synthetic wind generation dtype: {generation.dtype}, sample: {generation[:5]}")
         
         else:
             # Default pattern
-            generation = np.random.uniform(20, 100, n_points)
+            generation = np.random.uniform(20, 100, n_points).astype(np.float64)
         
         # Create DataFrame
         data = pd.DataFrame({
