@@ -1,9 +1,9 @@
 #!/bin/bash
 # Monitor the optimized experiment job
 
-JOB_ID=25602291
-OUTPUT_FILE="gpu_optimized_${JOB_ID}.out"
-ERROR_FILE="gpu_optimized_${JOB_ID}.err"
+JOB_ID=25614032
+OUTPUT_FILE="gpu_comprehensive_${JOB_ID}.out"
+ERROR_FILE="gpu_comprehensive_${JOB_ID}.err"
 
 echo "=== Job Monitoring Script ==="
 echo "Job ID: $JOB_ID"
@@ -50,7 +50,7 @@ echo "1. To check job status again: bjobs -l $JOB_ID"
 echo "2. To view full output: cat $OUTPUT_FILE"
 echo "3. To view errors: cat $ERROR_FILE"
 echo "4. To cancel job if needed: bkill $JOB_ID"
-echo "5. To check results after completion: ls -la results/optimized/"
+echo "5. To check results after completion: ls -la results/comprehensive/"
 echo
 echo "Expected completion time: 30-60 minutes from job start"
 echo "Run this script again to update status: ./monitor_job.sh"

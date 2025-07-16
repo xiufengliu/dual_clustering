@@ -1,28 +1,36 @@
 #!/bin/bash
-#BSUB -J optimized_experiments
+#BSUB -J comprehensive_experiments
 #BSUB -q gpua100
 #BSUB -gpu "num=1:mode=exclusive_process"
-#BSUB -n 4
-#BSUB -R "rusage[mem=8GB]"
-#BSUB -W 02:00
-#BSUB -o gpu_optimized_%J.out
-#BSUB -e gpu_optimized_%J.err
+#BSUB -n 8
+#BSUB -R "rusage[mem=16GB]"
+#BSUB -W 8:00
+#BSUB -o gpu_comprehensive_%J.out
+#BSUB -e gpu_comprehensive_%J.err
 #BSUB -N
 
-# Optimized experiment submission script with bug fixes
-# This script runs experiments with reduced computational complexity
+# Comprehensive experiment submission script for journal paper publication
+# This script runs full comprehensive evaluation with all datasets and components
 
-echo "=== Starting Optimized Experiments ==="
+echo "=== Starting Comprehensive Experiments ==="
 echo "Job ID: $LSB_JOBID"
 echo "Host: $(hostname)"
 echo "Date: $(date)"
 echo "Working directory: $(pwd)"
 
-# Load required modules
+# Source bashrc to set up local Python environment
+source ~/.bashrc
+
+# Load required modules (using local Python as per user preference)
 module load cuda/12.6
 
+# Set environment variables
+export PYTHONPATH="${PYTHONPATH}:$(pwd)"
+export CUDA_VISIBLE_DEVICES=0
+export OMP_NUM_THREADS=8
+
 echo "=== Installing dependencies ==="
-pip install -r requirements.txt
+pip install --user -r requirements.txt
 
 echo "=== Testing bug fixes first ==="
 python test_fixes.py
@@ -32,16 +40,10 @@ if [ $? -ne 0 ]; then
 fi
 echo "✅ Bug fix tests passed!"
 
-echo "=== Running optimized experiments ==="
-python run_optimized_experiments.py \
-    --config fast_benchmark_config \
-    --datasets kaggle_solar_plant entso_e_load_fixed nrel_canada_wind \
-    --max-samples 2000 \
-    --skip-computational \
-    --skip-cross-dataset \
-    --skip-robustness \
-    --output-dir results/optimized > experiment_results.log 2>&1
+echo "=== Running comprehensive evaluation ==="
+# Run full comprehensive evaluation with all components for journal paper
+python experiments/comprehensive_evaluation.py --config benchmark_config
 
-echo "=== Experiment completed ==="
-echo "Results saved to: results/optimized/"
-echo "Check output files: gpu_optimized_${LSB_JOBID}.out and gpu_optimized_${LSB_JOBID}.err"
+echo "=== Comprehensive experiment completed ==="
+echo "Results saved to: results/comprehensive/"
+echo "Check output files: gpu_comprehensive_${LSB_JOBID}.out and gpu_comprehensive_${LSB_JOBID}.err"
