@@ -1,7 +1,7 @@
 #!/bin/bash
 # Monitor the optimized experiment job
 
-JOB_ID=25614032
+JOB_ID=25616006
 OUTPUT_FILE="gpu_comprehensive_${JOB_ID}.out"
 ERROR_FILE="gpu_comprehensive_${JOB_ID}.err"
 

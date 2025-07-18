@@ -15,7 +15,7 @@ clustering:
   random_state: 42
   
 neutrosophic:
-  entropy_epsilon: 1e-9
+  entropy_epsilon: 0.000000001  # 1e-9 as explicit decimal to avoid YAML string parsing
   entropy_base: 2.0
   
 random_forest:

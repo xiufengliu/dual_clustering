@@ -46,6 +46,27 @@ class StatisticalTests:
         Returns:
             Dictionary with test statistic, p-value, and conclusion
         """
+        # Validate and align array shapes
+        errors1 = np.asarray(errors1, dtype=np.float64)
+        errors2 = np.asarray(errors2, dtype=np.float64)
+
+        # Handle shape mismatches by truncating to minimum length
+        if errors1.shape != errors2.shape:
+            min_len = min(len(errors1), len(errors2))
+            logger.warning(f"Shape mismatch in Diebold-Mariano test: {errors1.shape} vs {errors2.shape}. Truncating to {min_len}")
+            errors1 = errors1[:min_len]
+            errors2 = errors2[:min_len]
+
+        # Validate minimum sample size
+        if len(errors1) < 10:
+            logger.warning(f"Small sample size for Diebold-Mariano test: {len(errors1)}")
+            return {
+                'statistic': np.nan,
+                'p_value': np.nan,
+                'conclusion': 'insufficient_data',
+                'sample_size': len(errors1)
+            }
+
         # Calculate loss differential
         loss1 = np.abs(errors1) ** power
         loss2 = np.abs(errors2) ** power

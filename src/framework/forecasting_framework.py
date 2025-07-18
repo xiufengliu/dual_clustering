@@ -110,26 +110,47 @@ class NeutrosophicForecastingFramework:
     
     def fit(self, data: pd.DataFrame, target_column: str = 'energy_generation') -> 'NeutrosophicForecastingFramework':
         """Fit the complete neutrosophic forecasting framework.
-        
+
         Implementation of Algorithm 1 from the paper.
-        
+
         Args:
             data: Input DataFrame with time series data
             target_column: Name of target column
-            
+
         Returns:
             Self
         """
         self.logger.info("Starting framework training")
-        
+
+        # Ensure we have the target column
+        if target_column not in data.columns:
+            raise ValueError(f"Target column '{target_column}' not found in data. Available columns: {list(data.columns)}")
+
+        # Extract only the target column and timestamp for preprocessing
+        if 'timestamp' in data.columns:
+            preprocessing_data = data[['timestamp', target_column]].copy()
+        else:
+            # If no timestamp column, create a simple DataFrame with just the target
+            preprocessing_data = pd.DataFrame({
+                'timestamp': pd.date_range('2023-01-01', periods=len(data), freq='H'),
+                target_column: data[target_column]
+            })
+
+        # Ensure target column is numeric
+        preprocessing_data[target_column] = pd.to_numeric(preprocessing_data[target_column], errors='coerce')
+        preprocessing_data = preprocessing_data.dropna(subset=[target_column])
+
+        if len(preprocessing_data) == 0:
+            raise ValueError("No valid numeric data found in target column after preprocessing")
+
         # Stage 1: Preprocessing
         self.logger.info("Stage 1: Data preprocessing")
-        normalized_data, self.preprocessing_params = self.preprocessor.preprocess(data, fit=True)
-        
+        normalized_data, self.preprocessing_params = self.preprocessor.preprocess(preprocessing_data, fit=True)
+
         # For this implementation, we use the normalized time series as features
         # In practice, you might want to create lag features, time features, etc.
         X = normalized_data.reshape(-1, 1).astype(np.float64)  # Ensure X is float64
-        y = normalized_data  # Target is the same (for autoregressive forecasting)
+        y = normalized_data.astype(np.float64)  # Target is the same (for autoregressive forecasting)
         
         # Stage 2: Dual Clustering
         self.logger.info("Stage 2: Dual clustering")
@@ -141,28 +162,73 @@ class NeutrosophicForecastingFramework:
         # Stage 3: Neutrosophic Transformation
         self.logger.info("Stage 3: Neutrosophic transformation")
         try:
+            # Get cluster assignments with comprehensive validation
             kmeans_labels, fcm_memberships = self.dual_clusterer.get_cluster_assignments()
-            kmeans_labels = kmeans_labels.astype(int) # Ensure integer type before passing to transformer
 
-            # Log data types for debugging
-            self.logger.debug(f"K-means labels dtype: {kmeans_labels.dtype}, shape: {kmeans_labels.shape}")
-            self.logger.debug(f"FCM memberships dtype: {fcm_memberships.dtype}, shape: {fcm_memberships.shape}")
+            # Comprehensive data type validation before transformation
+            self.logger.debug(f"Pre-transform validation:")
+            self.logger.debug(f"  X: dtype={X.dtype}, shape={X.shape}")
+            self.logger.debug(f"  K-means labels: dtype={kmeans_labels.dtype}, shape={kmeans_labels.shape}, sample={kmeans_labels[:5]}")
+            self.logger.debug(f"  FCM memberships: dtype={fcm_memberships.dtype}, shape={fcm_memberships.shape}")
+            self.logger.debug(f"  Integrated features: dtype={integrated_features.dtype}, shape={integrated_features.shape}")
 
-            self.logger.debug(f"K-means labels dtype before transform: {kmeans_labels.dtype}, shape: {kmeans_labels.shape}, sample: {kmeans_labels[:5]}")
-            self.logger.debug(f"FCM memberships dtype before transform: {fcm_memberships.dtype}, shape: {fcm_memberships.shape}, sample: {fcm_memberships[:5, :5]}")
+            # Validate and fix data types if necessary
+            if X.dtype != np.float64:
+                self.logger.warning(f"X has dtype {X.dtype}, converting to float64")
+                X = X.astype(np.float64)
+
+            if kmeans_labels.dtype.kind not in ['i', 'u']:
+                self.logger.warning(f"K-means labels have non-integer dtype: {kmeans_labels.dtype}")
+                kmeans_labels = kmeans_labels.astype(int)
+
+            if fcm_memberships.dtype != np.float64:
+                self.logger.warning(f"FCM memberships have dtype {fcm_memberships.dtype}, converting to float64")
+                fcm_memberships = fcm_memberships.astype(np.float64)
+
+            # Check for any string contamination in the integrated features
+            if integrated_features.dtype.kind in ['U', 'S', 'O']:
+                self.logger.error(f"Integrated features contain string/object data: {integrated_features.dtype}")
+                sample_data = integrated_features.flatten()[:10]
+                self.logger.error(f"Sample values: {sample_data}")
+                self.logger.error(f"Sample data types: {[type(x) for x in sample_data]}")
+                raise ValueError(f"Integrated features contain non-numeric data: {integrated_features.dtype}")
+
+            self.logger.debug(f"Post-validation data types:")
+            self.logger.debug(f"  X: {X.dtype}, K-means: {kmeans_labels.dtype}, FCM: {fcm_memberships.dtype}")
+
+            # Perform neutrosophic transformation
             self.neutrosophic_components = self.neutrosophic_transformer.transform(
                 kmeans_labels, fcm_memberships
             )
 
-            # Create enriched feature set
+            # Create enriched feature set with additional validation
             enriched_features = self.neutrosophic_transformer.create_enriched_features(
-                X, self.dual_clusterer.get_integrated_features(), self.neutrosophic_components
+                X, integrated_features, self.neutrosophic_components
             )
+
+            # Final validation of enriched features
+            if enriched_features.dtype != np.float64:
+                self.logger.warning(f"Enriched features have dtype {enriched_features.dtype}, converting to float64")
+                enriched_features = enriched_features.astype(np.float64)
 
         except Exception as e:
             self.logger.error(f"Neutrosophic transformation failed: {e}")
-            self.logger.error(f"X dtype: {X.dtype}, shape: {X.shape}")
-            self.logger.error(f"Integrated features dtype: {integrated_features.dtype}, shape: {integrated_features.shape}")
+            self.logger.error(f"Error type: {type(e).__name__}")
+
+            # Enhanced error reporting
+            try:
+                self.logger.error(f"X dtype: {X.dtype}, shape: {X.shape}")
+                self.logger.error(f"Integrated features dtype: {integrated_features.dtype}, shape: {integrated_features.shape}")
+
+                # Sample the problematic data
+                if hasattr(integrated_features, 'flatten'):
+                    sample_data = integrated_features.flatten()[:20]
+                    self.logger.error(f"Integrated features sample: {sample_data}")
+                    self.logger.error(f"Sample data types: {[type(x) for x in sample_data[:5]]}")
+
+            except Exception as debug_error:
+                self.logger.error(f"Error during debug reporting: {debug_error}")
+
             raise RuntimeError(f"Neutrosophic transformation stage failed: {e}") from e
         
         # Generate feature names

@@ -113,6 +113,60 @@ def test_framework_integration():
         logger.error(f"❌ Framework integration test failed: {e}")
         return False
 
+def test_multi_column_dataframe():
+    """Test framework with multi-column DataFrame like in comprehensive evaluation."""
+    logger.info("Testing framework with multi-column DataFrame...")
+
+    try:
+        # Create sample data similar to what comprehensive evaluation uses
+        np.random.seed(42)
+        n_samples = 100
+
+        timestamps = pd.date_range('2023-01-01', periods=n_samples, freq='H')
+        data = pd.DataFrame({
+            'timestamp': timestamps,
+            'energy_generation': np.random.uniform(0, 100, n_samples),
+            'temperature': np.random.uniform(-10, 40, n_samples),
+            'hour': [t.hour for t in timestamps],
+            'day_of_week': [t.dayofweek for t in timestamps],
+            'month': [t.month for t in timestamps],
+            'day_of_year': [t.dayofyear for t in timestamps],
+            'quarter': [t.quarter for t in timestamps],
+            'is_weekend': [t.dayofweek >= 5 for t in timestamps],
+            'hour_sin': np.sin(2 * np.pi * np.array([t.hour for t in timestamps]) / 24),
+            'hour_cos': np.cos(2 * np.pi * np.array([t.hour for t in timestamps]) / 24),
+            'day_sin': np.sin(2 * np.pi * np.array([t.dayofweek for t in timestamps]) / 7),
+            'day_cos': np.cos(2 * np.pi * np.array([t.dayofweek for t in timestamps]) / 7),
+            'month_sin': np.sin(2 * np.pi * np.array([t.month for t in timestamps]) / 12),
+            'month_cos': np.cos(2 * np.pi * np.array([t.month for t in timestamps]) / 12)
+        })
+
+        # Test framework initialization
+        config = {
+            'clustering': {'n_clusters': 3, 'max_iter': 10},
+            'neutrosophic': {'entropy_epsilon': 1e-9, 'entropy_base': 2.0},
+            'random_forest': {'n_estimators': 10, 'max_depth': 3}
+        }
+
+        framework = NeutrosophicForecastingFramework(config)
+
+        # Test fitting with multi-column DataFrame
+        framework.fit(data)
+
+        # Test prediction
+        test_data = data.iloc[:5]  # Small test set
+        predictions = framework.predict(test_data.iloc[:1], horizon=3)
+
+        assert 'predictions' in predictions, "Predictions should contain 'predictions' key"
+        assert len(predictions['predictions']) == 3, "Should predict 3 steps ahead"
+
+        logger.info("✅ Multi-column DataFrame test passed")
+        return True
+
+    except Exception as e:
+        logger.error(f"❌ Multi-column DataFrame test failed: {e}")
+        return False
+
 def main():
     """Run all bug fix validation tests."""
     logger.info("=== Starting Bug Fix Validation Tests ===")
@@ -120,7 +174,8 @@ def main():
     tests = [
         test_neutrosophic_transformer,
         test_dual_clusterer,
-        test_framework_integration
+        test_framework_integration,
+        test_multi_column_dataframe
     ]
     
     passed = 0

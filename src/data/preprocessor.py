@@ -59,7 +59,9 @@ class DataPreprocessor:
         else:
             if self.normalization_params is None:
                 raise ValueError("Normalization parameters not fitted. Call preprocess with fit=True first.")
-            normalized_values = denormalize_data(normalized_values, self.normalization_params)
+            # Apply the same normalization using existing parameters
+            from ..utils.math_utils import apply_normalization
+            normalized_values = apply_normalization(values, self.normalization_params)
         
         # Prepare preprocessing parameters
         preprocessing_params = {

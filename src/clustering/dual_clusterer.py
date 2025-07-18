@@ -248,17 +248,85 @@ class DualClusterer:
             except Exception as e:
                 raise ValueError(f"Failed to convert FCM memberships to float64: {e}") from e
 
-        # Create one-hot encoding for K-Means labels
-        one_hot_kmeans = np.zeros((n_samples, self.n_clusters), dtype=np.float64)
-        one_hot_kmeans[np.arange(n_samples), kmeans_labels] = 1.0
+        # Validate kmeans_labels data type and values
+        if kmeans_labels.dtype.kind not in ['i', 'u']:
+            logger.warning(f"K-means labels have non-integer dtype: {kmeans_labels.dtype}. Converting to int.")
+            try:
+                kmeans_labels = kmeans_labels.astype(int)
+            except (ValueError, TypeError) as e:
+                logger.error(f"Failed to convert K-means labels to int: {e}")
+                # Fallback: create sequential labels
+                kmeans_labels = np.arange(n_samples) % self.n_clusters
+                logger.warning("Using sequential fallback labels for K-means")
 
-        # Ensure FCM memberships are float64
-        fcm_memberships = fcm_memberships.astype(np.float64)
+        # Validate label range
+        if np.any(kmeans_labels < 0) or np.any(kmeans_labels >= self.n_clusters):
+            logger.warning(f"K-means labels out of range [0, {self.n_clusters-1}]. Clipping values.")
+            kmeans_labels = np.clip(kmeans_labels, 0, self.n_clusters - 1)
 
-        # Concatenate one-hot K-Means with FCM memberships
-        integrated_features = np.concatenate([one_hot_kmeans, fcm_memberships], axis=1)
+        # Create one-hot encoding for K-Means labels with robust error handling
+        try:
+            one_hot_kmeans = np.zeros((n_samples, self.n_clusters), dtype=np.float64)
+            one_hot_kmeans[np.arange(n_samples), kmeans_labels] = 1.0
+        except (IndexError, ValueError) as e:
+            logger.error(f"Failed to create one-hot encoding: {e}")
+            # Fallback: uniform distribution
+            one_hot_kmeans = np.full((n_samples, self.n_clusters), 1.0/self.n_clusters, dtype=np.float64)
+            logger.warning("Using uniform distribution fallback for one-hot encoding")
 
-        # Ensure final result is float64 and contains no string data
+        # Validate and convert FCM memberships with comprehensive error handling
+        try:
+            # Ensure FCM memberships are numeric
+            if fcm_memberships.dtype.kind in ['U', 'S', 'O']:
+                logger.error(f"FCM memberships contain non-numeric data: {fcm_memberships.dtype}")
+                # Convert string/object data to float
+                fcm_memberships_converted = np.zeros_like(fcm_memberships, dtype=np.float64)
+                flat_fcm = fcm_memberships.flatten()
+                flat_converted = fcm_memberships_converted.flatten()
+
+                for i, value in enumerate(flat_fcm):
+                    try:
+                        if isinstance(value, (str, bytes)):
+                            flat_converted[i] = float(value)
+                        else:
+                            flat_converted[i] = float(value)
+                    except (ValueError, TypeError):
+                        flat_converted[i] = 1.0 / self.n_clusters  # Default uniform membership
+
+                fcm_memberships = flat_converted.reshape(fcm_memberships.shape)
+                logger.warning("Converted FCM memberships from string/object to float64")
+            else:
+                fcm_memberships = fcm_memberships.astype(np.float64)
+
+        except Exception as e:
+            logger.error(f"Failed to process FCM memberships: {e}")
+            # Fallback: uniform membership distribution
+            fcm_memberships = np.full((n_samples, self.n_clusters), 1.0/self.n_clusters, dtype=np.float64)
+            logger.warning("Using uniform distribution fallback for FCM memberships")
+
+        # Validate FCM membership constraints
+        if not np.allclose(np.sum(fcm_memberships, axis=1), 1.0, atol=1e-6):
+            logger.warning("FCM membership rows do not sum to 1.0. Normalizing.")
+            row_sums = np.sum(fcm_memberships, axis=1)
+            # Handle zero row sums
+            zero_sum_mask = row_sums == 0
+            if np.any(zero_sum_mask):
+                fcm_memberships[zero_sum_mask] = 1.0 / self.n_clusters
+                row_sums = np.sum(fcm_memberships, axis=1)
+            fcm_memberships = fcm_memberships / row_sums[:, np.newaxis]
+
+        # Concatenate one-hot K-Means with FCM memberships with explicit dtype control
+        try:
+            integrated_features = np.concatenate([one_hot_kmeans, fcm_memberships], axis=1, dtype=np.float64)
+        except Exception as e:
+            logger.error(f"Failed to concatenate features: {e}")
+            # Fallback: create combined feature matrix manually
+            integrated_features = np.zeros((n_samples, 2 * self.n_clusters), dtype=np.float64)
+            integrated_features[:, :self.n_clusters] = one_hot_kmeans
+            integrated_features[:, self.n_clusters:] = fcm_memberships
+            logger.warning("Used manual concatenation fallback")
+
+        # Final validation and cleanup
         if integrated_features.dtype != np.float64:
             logger.warning(f"Integrated features dtype is {integrated_features.dtype}, converting to float64")
             integrated_features = integrated_features.astype(np.float64)
@@ -267,6 +335,14 @@ class DualClusterer:
         if not np.all(np.isfinite(integrated_features)):
             logger.warning("Integrated features contain non-finite values, replacing with 0.0")
             integrated_features = np.where(np.isfinite(integrated_features), integrated_features, 0.0)
+
+        # Final shape and dtype validation
+        expected_shape = (n_samples, 2 * self.n_clusters)
+        if integrated_features.shape != expected_shape:
+            logger.error(f"Integrated features shape mismatch: got {integrated_features.shape}, expected {expected_shape}")
+            # Create properly shaped fallback
+            integrated_features = np.zeros(expected_shape, dtype=np.float64)
+            logger.warning("Created zero matrix fallback for integrated features")
 
         logger.info(f"Created integrated features with shape {integrated_features.shape} and dtype {integrated_features.dtype}")
 

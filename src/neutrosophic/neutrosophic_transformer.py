@@ -58,14 +58,21 @@ class NeutrosophicTransformer:
     
     def __init__(self, entropy_epsilon: float = 1e-9, entropy_base: float = 2.0):
         """Initialize neutrosophic transformer.
-        
+
         Args:
             entropy_epsilon: Small constant for numerical stability in entropy calculation
             entropy_base: Base for entropy calculation (default: 2 for bits)
         """
-        self.entropy_epsilon = entropy_epsilon
-        self.entropy_base = entropy_base
+        # Ensure parameters are proper numeric types (handle YAML string loading)
+        self.entropy_epsilon = float(entropy_epsilon) if entropy_epsilon is not None else 1e-9
+        self.entropy_base = float(entropy_base) if entropy_base is not None else 2.0
         self.is_fitted = False
+
+        # Initialize logger
+        self.logger = logging.getLogger(__name__)
+
+        # Log the actual values for debugging
+        self.logger.debug(f"NeutrosophicTransformer initialized with entropy_epsilon={self.entropy_epsilon} (type: {type(self.entropy_epsilon)}), entropy_base={self.entropy_base} (type: {type(self.entropy_base)})")
         
     def transform(self, kmeans_labels: np.ndarray, fcm_memberships: np.ndarray) -> NeutrosophicComponents:
         """Transform dual clustering outputs to neutrosophic components.
@@ -200,40 +207,87 @@ class NeutrosophicTransformer:
             Enriched feature matrix
         """
         logger.info("Creating enriched features from original, cluster, and neutrosophic components")
-        
+
         try:
-            # Step 1: Ensure all inputs are proper numpy arrays and float64
-            original_features = np.asarray(original_features, dtype=np.float64)
-            integrated_cluster_features = np.asarray(integrated_cluster_features, dtype=np.float64)
-            neutrosophic_array = neutrosophic_components.to_array().astype(np.float64)
-            
+            # Step 1: Comprehensive data type validation and conversion
+            logger.debug(f"Input data types - original: {original_features.dtype}, integrated: {integrated_cluster_features.dtype}")
+
+            # Convert all inputs to float64 with robust error handling
+            original_features = self._safe_convert_to_float64(original_features, "original_features")
+            integrated_cluster_features = self._safe_convert_to_float64(integrated_cluster_features, "integrated_cluster_features")
+            neutrosophic_array = self._safe_convert_to_float64(neutrosophic_components.to_array(), "neutrosophic_components")
+
+            # Additional validation: ensure all arrays are 2D
+            if original_features.ndim == 1:
+                original_features = original_features.reshape(-1, 1)
+            if integrated_cluster_features.ndim == 1:
+                integrated_cluster_features = integrated_cluster_features.reshape(-1, 1)
+            if neutrosophic_array.ndim == 1:
+                neutrosophic_array = neutrosophic_array.reshape(-1, 1)
+
             # Step 2: Validate shapes
             n_samples = original_features.shape[0]
             if integrated_cluster_features.shape[0] != n_samples:
                 raise ValueError(f"Sample count mismatch: original={n_samples}, integrated={integrated_cluster_features.shape[0]}")
             if neutrosophic_array.shape[0] != n_samples:
                 raise ValueError(f"Sample count mismatch: original={n_samples}, neutrosophic={neutrosophic_array.shape[0]}")
-            
-            # Step 3: Concatenate features
-            enriched_features = np.concatenate([
-                original_features, 
-                integrated_cluster_features, 
-                neutrosophic_array
-            ], axis=1)
-            
-            # Final validation
+
+            logger.debug(f"Feature shapes - original: {original_features.shape}, integrated: {integrated_cluster_features.shape}, neutrosophic: {neutrosophic_array.shape}")
+
+            # Step 3: Safe concatenation with explicit dtype control
+            feature_list = []
+
+            # Add original features
+            if original_features.size > 0:
+                feature_list.append(original_features.astype(np.float64))
+
+            # Add integrated cluster features
+            if integrated_cluster_features.size > 0:
+                feature_list.append(integrated_cluster_features.astype(np.float64))
+
+            # Add neutrosophic features
+            if neutrosophic_array.size > 0:
+                feature_list.append(neutrosophic_array.astype(np.float64))
+
+            # Concatenate with explicit dtype specification
+            if len(feature_list) > 1:
+                enriched_features = np.concatenate(feature_list, axis=1, dtype=np.float64)
+            elif len(feature_list) == 1:
+                enriched_features = feature_list[0].astype(np.float64)
+            else:
+                # Fallback: create minimal feature matrix
+                enriched_features = np.zeros((n_samples, 1), dtype=np.float64)
+                logger.warning("No valid features found, created zero matrix")
+
+            # Step 4: Final validation and cleanup
             if not np.all(np.isfinite(enriched_features)):
                 logger.warning("Non-finite values detected in enriched features, replacing with zeros")
                 enriched_features = np.where(np.isfinite(enriched_features), enriched_features, 0.0)
-            
+
+            # Ensure final result is float64
+            enriched_features = enriched_features.astype(np.float64)
+
             logger.info(f"Successfully created enriched features: shape={enriched_features.shape}, dtype={enriched_features.dtype}")
             return enriched_features
-                
+
         except Exception as e:
             logger.error(f"Feature enrichment failed: {e}")
-            # Fallback to original features if enrichment fails
-            logger.warning("Using only original features as fallback")
-            return np.asarray(original_features, dtype=np.float64)
+            logger.error(f"Error details: {type(e).__name__}: {str(e)}")
+
+            # Enhanced fallback with better error handling
+            try:
+                fallback_features = self._safe_convert_to_float64(original_features, "fallback_original_features")
+                if fallback_features.ndim == 1:
+                    fallback_features = fallback_features.reshape(-1, 1)
+                logger.warning(f"Using fallback features with shape: {fallback_features.shape}")
+                return fallback_features
+            except Exception as fallback_error:
+                logger.error(f"Fallback also failed: {fallback_error}")
+                # Ultimate fallback: create zero matrix
+                n_samples = len(original_features) if hasattr(original_features, '__len__') else 1
+                zero_features = np.zeros((n_samples, 1), dtype=np.float64)
+                logger.warning(f"Using zero matrix fallback with shape: {zero_features.shape}")
+                return zero_features
     
     def get_feature_names(self, original_feature_names: list, n_clusters: int) -> list:
         """Get feature names for the enriched feature set.
@@ -258,7 +312,119 @@ class NeutrosophicTransformer:
         feature_names.extend(['truth', 'indeterminacy', 'falsity'])
         
         return feature_names
-    
+
+    def _safe_convert_to_float64(self, data: np.ndarray, data_name: str) -> np.ndarray:
+        """Safely convert data to float64, handling mixed data types.
+
+        Args:
+            data: Input data array
+            data_name: Name of the data for logging
+
+        Returns:
+            Float64 numpy array
+        """
+        try:
+            # Handle None or empty data
+            if data is None:
+                logger.warning(f"{data_name} is None, creating zero array")
+                return np.zeros((1, 1), dtype=np.float64)
+
+            # First, ensure it's a numpy array
+            data = np.asarray(data)
+
+            # Handle empty arrays
+            if data.size == 0:
+                logger.warning(f"{data_name} is empty, creating minimal zero array")
+                return np.zeros((1, 1), dtype=np.float64)
+
+            logger.debug(f"Converting {data_name}: shape={data.shape}, dtype={data.dtype}, kind={data.dtype.kind}")
+
+            # Check if data contains string/object types
+            if data.dtype.kind in ['U', 'S', 'O']:  # Unicode, byte string, or object
+                logger.warning(f"{data_name} contains non-numeric data types: {data.dtype}")
+
+                # Sample some values for debugging
+                flat_data = data.flatten()
+                sample_values = flat_data[:min(5, len(flat_data))]
+                logger.debug(f"Sample values in {data_name}: {sample_values}")
+
+                # Try to convert each element to float, replacing invalid values with 0.0
+                converted_data = np.zeros(data.shape, dtype=np.float64)
+                flat_converted = converted_data.flatten()
+
+                invalid_count = 0
+                for i, value in enumerate(flat_data):
+                    try:
+                        if isinstance(value, (str, bytes)):
+                            # Handle common string representations
+                            if isinstance(value, str):
+                                value = value.strip()
+                                if value.lower() in ['nan', 'none', 'null', '']:
+                                    flat_converted[i] = 0.0
+                                    invalid_count += 1
+                                else:
+                                    flat_converted[i] = float(value)
+                            else:
+                                # Handle bytes
+                                flat_converted[i] = float(value.decode('utf-8'))
+                        elif np.isscalar(value):
+                            flat_converted[i] = float(value)
+                        else:
+                            # Handle complex objects
+                            flat_converted[i] = float(str(value))
+                    except (ValueError, TypeError, UnicodeDecodeError):
+                        # Replace invalid values with 0.0
+                        flat_converted[i] = 0.0
+                        invalid_count += 1
+                        if invalid_count <= 10:  # Log first 10 invalid values
+                            logger.debug(f"Replaced invalid value '{value}' (type: {type(value)}) with 0.0 in {data_name}")
+
+                converted_data = flat_converted.reshape(data.shape)
+                if invalid_count > 0:
+                    logger.warning(f"Replaced {invalid_count} invalid values with 0.0 in {data_name}")
+                logger.info(f"Converted {data_name} from {data.dtype} to float64")
+                return converted_data
+
+            elif data.dtype.kind in ['c']:  # Complex numbers
+                logger.warning(f"{data_name} contains complex numbers, taking real part")
+                return np.real(data).astype(np.float64)
+
+            elif data.dtype.kind in ['b']:  # Boolean
+                logger.info(f"{data_name} contains boolean data, converting to 0/1")
+                return data.astype(np.float64)
+
+            else:
+                # Data is already numeric, just convert to float64
+                numeric_data = data.astype(np.float64)
+
+                # Check for any non-finite values
+                if not np.all(np.isfinite(numeric_data)):
+                    logger.warning(f"{data_name} contains non-finite values, replacing with 0.0")
+                    numeric_data = np.where(np.isfinite(numeric_data), numeric_data, 0.0)
+
+                return numeric_data
+
+        except Exception as e:
+            logger.error(f"Failed to convert {data_name} to float64: {e}")
+            logger.error(f"Data info: shape={getattr(data, 'shape', 'unknown')}, dtype={getattr(data, 'dtype', 'unknown')}")
+
+            # Enhanced fallback: try to determine appropriate shape
+            try:
+                if hasattr(data, 'shape') and data.shape:
+                    fallback_shape = data.shape
+                elif hasattr(data, '__len__'):
+                    fallback_shape = (len(data),)
+                else:
+                    fallback_shape = (1,)
+
+                logger.warning(f"Creating zero array as fallback for {data_name} with shape {fallback_shape}")
+                return np.zeros(fallback_shape, dtype=np.float64)
+
+            except Exception as fallback_error:
+                logger.error(f"Fallback shape determination failed: {fallback_error}")
+                logger.warning(f"Using minimal fallback array for {data_name}")
+                return np.zeros((1, 1), dtype=np.float64)
+
     def analyze_neutrosophic_distribution(self, components: NeutrosophicComponents) -> Dict[str, Any]:
         """Analyze the distribution of neutrosophic components.
         

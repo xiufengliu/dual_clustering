@@ -189,3 +189,8 @@ wandb/
 # API keys and secrets
 secrets.yaml
 api_keys.txt
+
+# Job output files
+*.err
+*.out
+core.*
