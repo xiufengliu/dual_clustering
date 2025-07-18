@@ -177,6 +177,12 @@ docs/paper/
 docs/manuscript/
 *.pdf
 
+# Paper directory - confidential research content
+paper/paper.tex
+paper/*.tex
+paper/manuscript/
+paper/draft/
+
 # PyTorch models
 *.pth
 *.pt
